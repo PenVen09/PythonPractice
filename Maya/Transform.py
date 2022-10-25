@@ -261,5 +261,6 @@ class BaseWindow(object):
         cmds.deleteUI(self.windowName)
 
 
-
+lib = BaseWindow()
+lib.show()
 
