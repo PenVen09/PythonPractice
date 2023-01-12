@@ -5,6 +5,10 @@ dict ={"trans" : "translation",
         "sca"  : "scale"}
 
 Selected = cmds.ls(sl=True)
-
-
-    Number = cmds.xform
+if Selected == []:
+    cmds.warning
+    
+for selection in Selected:
+    for a in dict.values():
+        print(a)
+        Number = cmds.xform(selection, a=True, q=True)
