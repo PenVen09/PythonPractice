@@ -1,0 +1,10 @@
+from maya import cmds
+
+dict ={"trans" : "translation",
+        "rota" : "rotation",
+        "sca"  : "scale"}
+
+Selected = cmds.ls(sl=True)
+
+
+    Number = cmds.xform
