@@ -1,0 +1,69 @@
+from maya import cmds
+SUFFIXES = {
+    "null": "offset",
+    "transform": "ctrl",}
+
+DEFAULT_SUFFIX = "_Default"
+class Offseting():
+
+    def __init__(self):
+        self.selected=[]
+        self.short = []
+        self.finalName = []
+
+    def name(self):
+        self.selected = cmds.ls(selection=True)
+        print(self.selected)
+        if self.selected == []:
+            raise RuntimeError("You have made an error")
+
+        self.selected.sort(key=len, reverse=True)
+
+        for obj in self.selected:
+            A = cmds.objectType(obj)
+            if A == "joint":
+                self.skeleton = obj.split("|")[-1]
+                print(self.skeleton)
+                continue
+
+            if A != "transform":
+                continue
+
+            self.short = obj.split("|")[-1]
+
+            children= cmds.listRelatives(obj, children=True, fullPath=True)
+
+            if children == 1:
+                child = children[0]
+                objType= cmds.objectType(child)
+            else:
+                objType= cmds.objectType(obj)
+
+            suffix = SUFFIXES.get(objType, DEFAULT_SUFFIX)
+
+            if obj.endswith("_"+suffix):
+                self.finalName = obj
+                continue
+
+            newName = "%s_%s" % (self.short, suffix)
+            self.finalName = cmds.rename(obj, newName)
+
+            index = self.selected.index(obj)
+            self.selected[index] = obj.replace(self.short, newName)
+            #return self.selected
+
+    def newgroup(self, Zero=True):
+        groupname = "%s_%s" % (self.short, "offset")
+        Groupped = cmds.group(em=True, n=groupname)
+        cmds.matchTransform(Groupped, self.skeleton)
+        cmds.parent(self.finalName, groupname)
+        cmds.select(self.finalName)
+        if Zero == True:
+            cmds.xform(t=(0,0,0), ro=(0,0,0))
+
+
+Start = Offseting()
+Start.name()
+Start.newgroup()
+
+
