@@ -6,9 +6,14 @@ dict ={"trans" : "translation",
 
 Selected = cmds.ls(sl=True)
 if Selected == []:
-    cmds.warning
-    
-for selection in Selected:
-    for a in dict.values():
-        print(a)
-        Number = cmds.xform(selection, a=True, q=True)
+    cmds.warning("No selection")
+else:    
+    for selection in Selected:
+            Number = cmds.xform(selection, ro=True, q=True)
+            
+            if Number == [0,0,0]:
+                print ("Congrats! Selected Objects/Joints have 0 rotation value.")
+            else:
+                print("Error detected.")
+                rotated.append(selection)
+                cmds.select(rotated)
