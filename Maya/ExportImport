@@ -1,0 +1,134 @@
+import os
+import json
+from maya import cmds
+
+
+class BaseWindow(object):
+
+    windowName = "BaseWindow"
+
+    def __init__(self):
+        self.object_info_list = []
+        self.scene_path = cmds.file(q=True, sceneName=True)
+        if self.scene_path:
+            scene_folder = os.path.dirname(self.scene_path)
+            self.file_name = os.path.basename(scene_folder)
+            self.Directory = os.path.join(scene_folder, 'bindskinData')
+            if not os.path.exists(self.Directory):
+                os.mkdir(self.Directory)
+
+        else:
+            print("The current Maya scene is not saved.")
+
+
+
+    def show(self):
+
+        if cmds.window(self.windowName, query=True, exists=True):
+            cmds.deleteUI(self.windowName)
+
+        cmds.window(self.windowName)
+
+        self.buildUI()
+
+        cmds.showWindow()
+
+    def buildUI(self):
+        column = cmds.columnLayout()
+        cmds.text(label="Export and Import skin:")
+        cmds.button("Exp", label="Export",command = self.Export)
+        cmds.button("Imp", label="Import",command = self.Import)
+
+
+    def reset(self, *args):
+        pass
+
+    def close(self, *args):
+        cmds.deleteUI(self.windowName)
+
+
+    def Export(self, *args):
+        selected_objects = cmds.ls(sl=True)
+        if not selected_objects:
+            cmds.warning("No selection")
+        else:
+            self.object_info_list = []
+            for obj in selected_objects:
+                skin_clusters = cmds.ls(cmds.listHistory(obj), type='skinCluster')
+
+                if not skin_clusters:
+                    cmds.warning(f"No skin cluster found for {obj}")
+
+                else:
+                    for skin_cluster in skin_clusters:
+                        joints = cmds.skinCluster(skin_cluster, query=True, inf=True) or []
+                        binding = cmds.skinCluster(skin_cluster, query=True, bm=True) or []
+                        skinning = cmds.skinCluster(skin_cluster, query=True, sm=True)
+                        normalizing = cmds.skinCluster(skin_cluster, query=True, nw=True)
+                        distribution = cmds.skinCluster(skin_cluster, query=True, wd=True)
+                        mInfluence = cmds.skinCluster(skin_cluster, query=True, mi=True) or []
+
+
+                        info_list = {
+                            'meshNames': obj,
+                            'sClustername': skin_cluster,
+                            'jointsName': joints,
+                            'bindMethod':binding,
+                            'skinMethod': skinning,
+                            'normalizeWeight':normalizing,
+                            'weightDistribution':distribution,
+                            'maxInfluence': mInfluence
+                        }
+                        self.object_info_list.append(info_list)
+
+
+                        cmds.deformerWeights(self.file_name + "_" + obj + ".xml", path =self.Directory, ex= True, deformer = skin_cluster)
+
+
+                cmds.skinCluster(obj, e=True ,unbind=True)
+
+                with open(os.path.join(self.Directory, 'output.json'), 'w') as skinData:
+                            json.dump(self.object_info_list, skinData)
+
+
+
+    def Import(self, *args):
+            with open(os.path.join(self.Directory, 'output.json'), 'r' ) as skinData:
+                  data = json.load(skinData)
+
+            Abnormal_count = 0
+            for eachdata in data:
+                meshname = eachdata['meshNames']
+                a = cmds.objExists(meshname + '|*skinCluster*')
+                b= cmds.objExists(meshname)
+                if not a != True and b == True:
+                    Abnormal_count +=1
+                    break
+                else:
+                    pass
+
+
+                if Abnormal_count != 0:
+                    print("Found abnormalities, aborting")
+                    break
+
+                else:
+                    joint_select = eachdata['jointsName']
+                    obj_select = eachdata['meshNames']
+                    cmds.select(clear=True)
+                    cmds.select(joint_select)
+                    cmds.select(obj_select, add=True)
+                    cmds.skinCluster(joint_select, obj_select, bm=eachdata['bindMethod'],
+                                     sm = eachdata['skinMethod'], nw=eachdata['normalizeWeight'],
+                                     wd = eachdata['weightDistribution'], mi = eachdata['maxInfluence']
+                                     )
+
+                    cmds.select(clear=True)
+
+                    history_nodes = cmds.listHistory(obj_select)
+                    skins = next((node for node in history_nodes if cmds.nodeType(node) == 'skinCluster'), None)
+
+                    cmds.deformerWeights(self.file_name + "_" + obj_select  + ".xml", path =self.Directory,im= True, deformer = skins)
+
+Start = BaseWindow()
+Start.show()
