@@ -1,0 +1,94 @@
+import maya.cmds as mc
+
+def copy_skin_from_source_to_targets():
+    """
+    Copies skin weights from the first selected object to all other selected objects or their descendants.
+
+    Workflow:
+        - The user selects the source object first.
+        - The user selects one or more target objects or groups.
+    """
+    # Get the selected objects
+    selection = mc.ls(selection=True)
+    if not selection or len(selection) < 2:
+        raise ValueError("Please select a source object first, followed by one or more targets (or groups).")
+
+    # The first selected object is the source
+    source = selection[0]
+    targets = selection[1:]
+
+    # Find the skinCluster for the source
+    source_skin_cluster = next((x for x in mc.listHistory(source, pruneDagObjects=True)
+                                if mc.nodeType(x) == "skinCluster"), None)
+
+    if not source_skin_cluster:
+        raise ValueError(f"No skinCluster found on the source object '{source}'. Please ensure the source is skinned.")
+
+    # Query the influences from the source skinCluster
+    influences = mc.skinCluster(source_skin_cluster, query=True, influence=True)
+
+    if not influences:
+        raise ValueError(f"No influences found on the skinCluster of '{source}'.")
+
+    # Process each target or target group
+    for target in targets:
+        # Gather all descendants of the target, including mesh nodes
+        objects_to_process = mc.listRelatives(target, allDescendents=True, fullPath=True) or []
+        objects_to_process.append(target)  # Include the target itself
+
+        # Filter objects with skinClusters (including both transform and shape nodes)
+        skinned_objects = []
+        for obj in objects_to_process:
+            history = mc.listHistory(obj, pruneDagObjects=True) or []
+            if any(mc.nodeType(node) == "skinCluster" for node in history):
+                skinned_objects.append(obj)
+
+        if not skinned_objects:
+            # No skinCluster, create one and bind to the same influences as the source
+            skinned_objects = [target]  # Add the target itself for skinning
+
+            # Create a new skinCluster for this object with the same influences as the source
+            new_skin_cluster = mc.skinCluster(influences, target, toSelectedBones=True, 
+                                              bindMethod=0, weightDistribution=1, maximumInfluences=4, 
+                                              normalizeWeights=1)[0]
+
+            # Set maintainMaxInfluences to 1
+            mc.setAttr(f"{new_skin_cluster}.maintainMaxInfluences", 1)
+
+        # Copy skin weights for each skinned object
+        for skinned_target in skinned_objects:
+            try:
+                # Check if the target already has a skinCluster
+                target_skin_cluster = next((x for x in mc.listHistory(skinned_target, pruneDagObjects=True)
+                                            if mc.nodeType(x) == "skinCluster"), None)
+
+                if not target_skin_cluster:
+                    # If no skinCluster exists, create one using the influences of the source
+                    target_skin_cluster = mc.skinCluster(influences, skinned_target, toSelectedBones=True,
+                                                         bindMethod=0, weightDistribution=1, maximumInfluences=4, 
+                                                         normalizeWeights=1)[0]  # Capture the skinCluster node
+
+                    # Set maintainMaxInfluences to 1
+                    mc.setAttr(f"{target_skin_cluster}.maintainMaxInfluences", 1)
+
+                # Copy the skin weights from the source to the target
+                mc.copySkinWeights(
+                    sourceSkin=source_skin_cluster,
+                    destinationSkin=target_skin_cluster,
+                    noMirror=True,
+                    surfaceAssociation="closestPoint",
+                    influenceAssociation="oneToOne"
+                )
+            except Exception as e:
+                mc.warning(f"Error processing '{skinned_target}': {e}")
+
+    # Show confirmation dialog
+    mc.confirmDialog(title="Process Complete", message="Skin weights copied successfully.", button=["OK"])
+
+# Usage example:
+try:
+    copy_skin_from_source_to_targets()
+except ValueError as e:
+    mc.warning(str(e))
+except Exception as e:
+    mc.warning(f"An unexpected error occurred: {e}")
