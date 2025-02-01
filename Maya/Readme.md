@@ -1,1 +1,0 @@
-I'm thinking to modify and expand the feature of OffsetandController script to being able to choose group or parent offset matrix, also adding parenting multiple NURBS in one click, I will also add UI on this script
