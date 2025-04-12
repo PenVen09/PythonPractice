@@ -1,0 +1,239 @@
+from PySide2 import QtWidgets, QtCore
+import os
+from shiboken2 import wrapInstance
+import maya.OpenMayaUI as omui
+import maya.cmds as cmds  # Don't forget to import cmds!
+
+def get_maya_main_window():
+    main_window_ptr = omui.MQtUtil.mainWindow()
+    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
+    
+def get_save_path():
+    scene_path = cmds.file(q=True, sceneName=True)
+    if not scene_path:
+        return None
+    dir_path = os.path.dirname(scene_path)
+    return os.path.join(dir_path, "skin_transfer_data.txt")
+
+class TransferMain:
+    def __init__(self, proxy_text, original_text, guide_list):
+        self.proxy_text = proxy_text
+        self.original_text = original_text
+        self.guide_list = guide_list
+
+    def proxyName(self):
+        selected = cmds.ls(selection=True)
+        #print(selected)
+        
+        if not selected:
+            print("No object selected")
+            return 
+        
+        if len(selected) > 1:
+            print("More than 1 selected")
+            return 
+        
+        self.proxy_text.setText(selected[0])
+        return
+
+    def originalName(self):
+        selected = cmds.ls(selection=True)
+        #print(selected)
+        
+        if not selected:
+            print("No object selected")
+            return 
+        
+        if len(selected) > 1:
+            print("More than 1 selected")
+            return 
+        
+        self.original_text.setText(selected[0])
+        return
+        
+       
+    def removeFromShelf(self):
+        for item in self.guide_list.selectedItems():
+            self.guide_list.takeItem(self.guide_list.row(item))
+        self.save_to_file()
+     	
+    def execute(self):
+        selected_items = self.guide_list.selectedItems()
+        if not selected_items:
+            print(" No item selected")
+            return
+
+        for item in selected_items:
+            data = item.text()
+            parts = [part.strip() for part in data.split(":")]
+            if len(parts) < 2:
+                print(f" Invalid format: {data}")
+                continue
+            proxy = parts[0]
+            original = parts[1]
+            original_sc = original.split('.')[0]
+            print(original_sc)
+            
+            
+            
+            # Get the skinCluster for the proxy and original
+            proxy_skinCluster = self.get_skin_cluster(proxy)
+            original_skinCluster = self.get_skin_cluster(original_sc)
+
+            if not proxy_skinCluster or not original_skinCluster:
+                print(f" No skinCluster found for {proxy} or {original}")
+                continue
+
+            print(f"Transferring skin weights: {proxy} → {original}")
+            try:
+                
+                cmds.copySkinWeights(ss=proxy_skinCluster, ds=original_skinCluster, noMirror=True, surfaceAssociation="closestPoint", influenceAssociation="closestJoint")
+            except Exception as e:
+                print(f" Error: {e}")
+
+    def get_skin_cluster(self, mesh_name):
+        """Helper method to retrieve the skinCluster for a given mesh."""
+        history = cmds.listHistory(mesh_name)
+        skin_clusters = cmds.ls(history, type="skinCluster")
+        if skin_clusters:
+            return skin_clusters[0]  # Return the first skinCluster found
+        return None
+
+    def addToShelf(self):
+       original_data = self.original_text.text()
+       proxy_data = self.proxy_text.text()
+       if not proxy_data or not original_data:
+           print(" Both Proxy and Original must be filled in.")
+           return
+       combined_data = f"{proxy_data} : {original_data}"
+       self.guide_list.addItem(combined_data)
+       self.save_list_to_file()
+
+
+    def save_list_to_file(self):
+        file_path = get_save_path()
+        folder = os.path.dirname(file_path)
+
+        if not folder:
+            print(" No scene saved. Cannot save list.")
+            return
+
+        file_path = os.path.join(folder, "transfer_skin_list.txt")
+        with open(file_path, "w") as f:
+            for index in range(self.guide_list.count()):
+               item = self.guide_list.item(index).text()
+               f.write(item + "\n")
+        print(f" List saved to: {file_path}")
+
+
+    def load_list_from_file(self):
+        scene_path = cmds.file(q=True, sceneName=True)
+        if not scene_path:
+            return
+
+        folder = os.path.dirname(scene_path)
+        file_path = os.path.join(folder, "transfer_skin_list.txt")
+
+        if not os.path.exists(file_path):
+            return
+
+        with open(file_path, "r") as f:
+            for line in f:
+                self.guide_list.addItem(line.strip())
+
+               
+
+class TransferSkin(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(TransferSkin, self).__init__(parent or get_maya_main_window())
+        self.setWindowTitle("Transfer Skin Tool")
+        self.setMinimumWidth(300)
+
+        self.proxy_text = QtWidgets.QLineEdit()
+        self.original_text = QtWidgets.QLineEdit()
+        self.guide_list = QtWidgets.QListWidget()
+
+        self.transfer_main = TransferMain(self.proxy_text, self.original_text,self.guide_list)
+        self.transfer_main.load_list_from_file()
+
+        self.setWindowFlags(QtCore.Qt.Window)
+
+        self.setLayout(QtWidgets.QVBoxLayout())
+
+        self.tabs = QtWidgets.QTabWidget()
+        self.layout().addWidget(self.tabs)
+
+        self.create_guide_tab()
+
+    def create_guide_tab(self):
+        guide_tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+
+        list_layout = QtWidgets.QHBoxLayout()
+        list_layout.addWidget(self.guide_list)
+        layout.addLayout(list_layout)
+        
+        
+        iteration_layout = QtWidgets.QHBoxLayout()
+        iteration_button = QtWidgets.QPushButton("+ Add to Shelf")
+        iteration_button.clicked.connect(self.transfer_main.addToShelf)
+
+        # Remove Button
+        remove_button = QtWidgets.QPushButton("- Remove from Shelf")
+        remove_button.clicked.connect(self.transfer_main.removeFromShelf)
+        iteration_layout.addWidget(iteration_button)
+        iteration_layout.addWidget(remove_button)
+        
+        layout.addLayout(iteration_layout)
+
+        # Proxy Skin section
+        proxy_layout = QtWidgets.QHBoxLayout()
+        proxy_button = QtWidgets.QPushButton("+")
+        self.proxy_text.setPlaceholderText("Proxy Skin Name")
+        proxy_layout.addWidget(QtWidgets.QLabel("Proxy Skin:"))
+
+        # Connect proxy_button to TransferMain.proxyName
+        proxy_button.clicked.connect(self.transfer_main.proxyName)
+
+        proxy_layout.addWidget(proxy_button)
+        proxy_layout.addWidget(self.proxy_text)
+        layout.addLayout(proxy_layout)
+
+        # Original Mesh section
+        original_layout = QtWidgets.QHBoxLayout()
+        original_button = QtWidgets.QPushButton("+")
+        original_text = QtWidgets.QLineEdit()
+        self.original_text.setPlaceholderText("Original Mesh Name")
+        original_layout.addWidget(QtWidgets.QLabel("Original Mesh:"))
+        
+        # Connect original_button to TransferMain.originalName
+        original_button.clicked.connect(self.transfer_main.originalName)
+        
+        original_layout.addWidget(original_button)
+        original_layout.addWidget(self.original_text)
+        layout.addLayout(original_layout)
+        
+        
+        executeSelected_layout = QtWidgets.QHBoxLayout()
+        executeSelected_button = QtWidgets.QPushButton("Execute")
+        executeSelected_button.clicked.connect(self.transfer_main.execute)
+        executeSelected_layout.addWidget(executeSelected_button)
+        layout.addLayout(executeSelected_layout)
+
+        guide_tab.setLayout(layout)
+        self.tabs.addTab(guide_tab, "Guide")
+
+
+# Show window (with debug prints)
+def show_transfer_skin_window():
+    global transfer_skin_window
+    try:
+        transfer_skin_window.close()
+        transfer_skin_window.deleteLater()
+    except:
+        pass
+
+    transfer_skin_window = TransferSkin()
+    transfer_skin_window.show()
+
+show_transfer_skin_window()
