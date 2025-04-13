@@ -1,12 +1,6 @@
 from PySide2 import QtWidgets, QtCore
 import os
-from shiboken2 import wrapInstance
-import maya.OpenMayaUI as omui
-import maya.cmds as cmds  # Don't forget to import cmds!
-
-def get_maya_main_window():
-    main_window_ptr = omui.MQtUtil.mainWindow()
-    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
+import maya.cmds as cmds  
     
 def get_save_path():
     scene_path = cmds.file(q=True, sceneName=True)
@@ -23,7 +17,6 @@ class TransferMain:
 
     def proxyName(self):
         selected = cmds.ls(selection=True)
-        #print(selected)
         
         if not selected:
             print("No object selected")
@@ -37,8 +30,9 @@ class TransferMain:
         return
 
     def originalName(self):
-        selected = cmds.ls(selection=True)
-        #print(selected)
+        selected = cmds.ls(selection=True, flatten=True)
+        
+        print(selected)
         
         if not selected:
             print("No object selected")
@@ -48,7 +42,37 @@ class TransferMain:
             #print("More than 1 selected")
             #return 
         
-        self.original_text.setText(selected[0])
+        self.original_text.setText(",".join(selected))
+        return
+
+    def moveItemUp(self):
+        selected_items = self.guide_list.selectedItems()
+        if not selected_items:
+            print("No item selected to move up")
+            return
+        for item in selected_items:
+            current_row = self.guide_list.row(item)
+            if current_row > 0:
+               self.guide_list.takeItem(current_row)
+               self.guide_list.insertItem(current_row - 1, item.text())
+               self.guide_list.setCurrentRow(current_row - 1)
+       
+        self.save_list_to_file()
+      
+
+    def moveItemDown(self):
+        selected_items = self.guide_list.selectedItems()
+        if not selected_items:
+            print("No item selected to move up")
+            return
+        for item in selected_items:
+            current_row = self.guide_list.row(item)
+            if current_row < self.guide_list.count() - 1:
+                self.guide_list.takeItem(current_row)
+                self.guide_list.insertItem(current_row + 1, item.text())
+                self.guide_list.setCurrentRow(current_row + 1)
+        self.save_list_to_file()
+
         return
         
        
@@ -72,6 +96,8 @@ class TransferMain:
             proxy = parts[0]
             original = parts[1]
             original_sc = original.split('.')[0]
+            vertex_str = original  # Get the single string inside the list
+            vertex_list = vertex_str.split(",")  # Split by commas
             
             # Get the skinCluster for the proxy and original
             proxy_skinCluster = self.get_skin_cluster(proxy)
@@ -83,15 +109,20 @@ class TransferMain:
 
             print(f"Transferring skin weights: {proxy} ? {original}")
             try:
+                cmds.setAttr(proxy_skinCluster + ".envelope", 0)
+                cmds.setAttr(original_skinCluster + ".envelope", 0)
                 cmds.select(proxy)
-                cmds.select(original, add=True)
-                #cmds.copySkinWeights(noMirror=True, surfaceAssociation="closestPoint", influenceAssociation="closestJoint")
+                cmds.select(vertex_list, add=True)
+                cmds.copySkinWeights(noMirror=True, surfaceAssociation="closestPoint", influenceAssociation="closestJoint")
+                cmds.setAttr(proxy_skinCluster + ".envelope", 1)
+                cmds.setAttr(original_skinCluster + ".envelope", 1)
+                cmds.select(clear=True)
                 #cmds.copySkinWeights(ss=proxy_skinCluster, ds=original_skinCluster, noMirror=True, surfaceAssociation="closestPoint", influenceAssociation="closestJoint")
             except Exception as e:
                 print(f" Error: {e}")
 
     def get_skin_cluster(self, mesh_name):
-        """Helper method to retrieve the skinCluster for a given mesh."""
+
         history = cmds.listHistory(mesh_name)
         skin_clusters = cmds.ls(history, type="skinCluster")
         if skin_clusters:
@@ -168,16 +199,26 @@ class TransferSkin(QtWidgets.QWidget):
         guide_tab = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout()
 
+        move_up_button = QtWidgets.QPushButton("^")
+        move_up_button.clicked.connect(self.transfer_main.moveItemUp)
+        
+        move_down_button = QtWidgets.QPushButton("v")
+        move_down_button.clicked.connect(self.transfer_main.moveItemDown)
+        
+        move_buttons_layout = QtWidgets.QHBoxLayout()
+        move_buttons_layout.addWidget(move_up_button)
+        move_buttons_layout.addWidget(move_down_button)
+        
+        layout.addLayout(move_buttons_layout)
+
         list_layout = QtWidgets.QHBoxLayout()
         list_layout.addWidget(self.guide_list)
         layout.addLayout(list_layout)
-        
         
         iteration_layout = QtWidgets.QHBoxLayout()
         iteration_button = QtWidgets.QPushButton("+ Add to Shelf")
         iteration_button.clicked.connect(self.transfer_main.addToShelf)
 
-        # Remove Button
         remove_button = QtWidgets.QPushButton("- Remove from Shelf")
         remove_button.clicked.connect(self.transfer_main.removeFromShelf)
         iteration_layout.addWidget(iteration_button)
@@ -185,27 +226,24 @@ class TransferSkin(QtWidgets.QWidget):
         
         layout.addLayout(iteration_layout)
 
-        # Proxy Skin section
+
         proxy_layout = QtWidgets.QHBoxLayout()
         proxy_button = QtWidgets.QPushButton("+")
         self.proxy_text.setPlaceholderText("Proxy Skin Name")
         proxy_layout.addWidget(QtWidgets.QLabel("Proxy Skin:"))
 
-        # Connect proxy_button to TransferMain.proxyName
         proxy_button.clicked.connect(self.transfer_main.proxyName)
 
         proxy_layout.addWidget(proxy_button)
         proxy_layout.addWidget(self.proxy_text)
         layout.addLayout(proxy_layout)
 
-        # Original Mesh section
         original_layout = QtWidgets.QHBoxLayout()
         original_button = QtWidgets.QPushButton("+")
         original_text = QtWidgets.QLineEdit()
         self.original_text.setPlaceholderText("Original Mesh Name")
         original_layout.addWidget(QtWidgets.QLabel("Original Mesh:"))
         
-        # Connect original_button to TransferMain.originalName
         original_button.clicked.connect(self.transfer_main.originalName)
         
         original_layout.addWidget(original_button)
@@ -223,7 +261,7 @@ class TransferSkin(QtWidgets.QWidget):
         self.tabs.addTab(guide_tab, "Guide")
 
 
-# Show window (with debug prints)
+
 def show_transfer_skin_window():
     global transfer_skin_window
     try:
