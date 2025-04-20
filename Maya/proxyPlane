@@ -1,7 +1,7 @@
 import maya.cmds as cmds
 
-width=5
-subdivs = 0
+width=4
+subdivs = 2
 
 def create_proxy_mesh_from_skeleton(selected_joint):
 	cmds.select(clear=True)
@@ -19,7 +19,6 @@ def create_proxy_mesh_from_skeleton(selected_joint):
 	planeName = cmds.rename(proxyPlane, planeName)
 	cmds.matchTransform(planeName, start_joint)
 	cmds.parent(planeName, start_joint)
-
 	cmds.select(clear=True)
 
 	x=0
@@ -59,8 +58,6 @@ def create_proxy_mesh_from_skeleton(selected_joint):
 			cmds.select(edges01, edges02)
 			cmds.polySplitRing(insertWithEdgeFlow=1, divisions=subdivs, weight=0.5, stp=2)
 			cmds.select(clear=True)
-
-
 
 	cmds.parent(planeName, w=True)
 	cmds.makeIdentity(apply=True, t=1, r=1, s=1)
