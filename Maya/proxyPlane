@@ -1,7 +1,9 @@
 import maya.cmds as cmds
+import maya.api.OpenMaya as om
+import math
 
-width=4
-subdivs = 2
+width=2
+subdivs = 0
 
 def create_proxy_mesh_from_skeleton(selected_joint):
 	cmds.select(clear=True)
@@ -41,6 +43,9 @@ def create_proxy_mesh_from_skeleton(selected_joint):
 		cmds.xform(vtx01, r=True, t=left_offsetpos)
 		cmds.xform(vtx02, r=True, t=right_offsetpos)
 		
+		rotate_vertices(joint, [vtx01,vtx02])
+
+		
 
 	#subdiv edge
 	if subdivs > 1:
@@ -62,6 +67,25 @@ def create_proxy_mesh_from_skeleton(selected_joint):
 	cmds.parent(planeName, w=True)
 	cmds.makeIdentity(apply=True, t=1, r=1, s=1)
 	cmds.delete(planeName, constructionHistory=True)
+
+def rotate_vertices(joint, vertex):
+	orient_deg = cmds.getAttr(joint + ".jointOrient")[0]
+	orient_rad = [math.radians(a) for a in orient_deg]
+	rotation_matrix = om.MEulerRotation(orient_rad).asMatrix()
+	pivot_pos = cmds.xform(joint, q=True, ws=True, t=True)
+	pivot_vec = om.MVector(pivot_pos)
+	
+	for vtx in vertex:
+		pos = cmds.pointPosition(vtx, world=True)
+		pos_vec = om.MVector(pos)
+		
+		local_pos = pos_vec - pivot_vec
+		
+		rotated_local = local_pos * rotation_matrix
+		
+		new_pos = rotated_local + pivot_vec
+		
+		cmds.xform(vtx, ws=True, t=[new_pos.x, new_pos.y, new_pos.z])
 
 
 selection = cmds.ls(selection=True, type='joint')
