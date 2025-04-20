@@ -4,6 +4,7 @@ import math
 
 width=2
 subdivs = 0
+rotation = 0
 
 def create_proxy_mesh_from_skeleton(selected_joint):
 	cmds.select(clear=True)
@@ -43,7 +44,8 @@ def create_proxy_mesh_from_skeleton(selected_joint):
 		cmds.xform(vtx01, r=True, t=left_offsetpos)
 		cmds.xform(vtx02, r=True, t=right_offsetpos)
 		
-		rotate_vertices(joint, [vtx01,vtx02])
+		if rotation == 1:
+			rotate_vertices(joint, [vtx01,vtx02])
 
 		
 
@@ -78,13 +80,9 @@ def rotate_vertices(joint, vertex):
 	for vtx in vertex:
 		pos = cmds.pointPosition(vtx, world=True)
 		pos_vec = om.MVector(pos)
-		
 		local_pos = pos_vec - pivot_vec
-		
 		rotated_local = local_pos * rotation_matrix
-		
 		new_pos = rotated_local + pivot_vec
-		
 		cmds.xform(vtx, ws=True, t=[new_pos.x, new_pos.y, new_pos.z])
 
 
