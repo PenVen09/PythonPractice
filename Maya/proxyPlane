@@ -1,0 +1,78 @@
+import maya.cmds as cmds
+
+width=5
+subdivs = 0
+
+def create_proxy_mesh_from_skeleton(selected_joint):
+	cmds.select(clear=True)
+	start_joint = selected_joint[0]
+	end_joint = selected_joint[1]
+	
+	children = cmds.listRelatives(end_joint,allParents=True,fullPath=True,type='joint')[0]
+	parents = children.split("|")
+	parents.pop(0)
+	allJoints = parents + [end_joint]
+	count = len(allJoints) -1
+	
+	planeName = start_joint + "_Proxy"
+	proxyPlane = cmds.polyPlane(w=width, sx=count , sy=1)[0]
+	planeName = cmds.rename(proxyPlane, planeName)
+	cmds.matchTransform(planeName, start_joint)
+	cmds.parent(planeName, start_joint)
+
+	cmds.select(clear=True)
+
+	x=0
+	#main edge 
+	for i in range(len(allJoints)):
+		
+		joint = allJoints[i]
+		pos = cmds.xform(joint, q=True, ws=True, t=True)
+		
+		left_pos = [pos[0], pos[1], pos[2]]
+		right_pos = [pos[0], pos[1], pos[2]]
+		
+		vtx01 = f"{planeName}.vtx[{i}]"
+		vtx02 = f"{planeName}.vtx[{i+ count +1}]"
+		
+		cmds.xform(vtx01, ws=True, t=left_pos)
+		cmds.xform(vtx02, ws=True, t=right_pos)
+		left_offsetpos = [0,0,- width]
+		right_offsetpos = [0, 0, width]
+		cmds.xform(vtx01, r=True, t=left_offsetpos)
+		cmds.xform(vtx02, r=True, t=right_offsetpos)
+		
+
+	#subdiv edge
+	if subdivs > 1:
+		for i in range(len(allJoints) - 1):
+			vtx01 = f"{planeName}.vtx[{i}]"
+			vtx02 = f"{planeName}.vtx[{i+1}]"
+			cmds.select(vtx01, vtx02)
+			edges01 = cmds.polyListComponentConversion(internal=True,fv=True, toEdge=True)
+			cmds.select(clear=True)
+			vtx03 = f"{planeName}.vtx[{i+ count +1}]"
+			vtx04 = f"{planeName}.vtx[{i+ count +2}]"
+			cmds.select(vtx03, vtx04)
+			edges02 = cmds.polyListComponentConversion(internal=True,fv=True, toEdge=True)
+			
+			cmds.select(edges01, edges02)
+			cmds.polySplitRing(insertWithEdgeFlow=1, divisions=subdivs, weight=0.5, stp=2)
+			cmds.select(clear=True)
+
+
+
+	cmds.parent(planeName, w=True)
+	cmds.makeIdentity(apply=True, t=1, r=1, s=1)
+	cmds.delete(planeName, constructionHistory=True)
+
+
+selection = cmds.ls(selection=True, type='joint')
+
+if len(selection)==2:
+	create_proxy_mesh_from_skeleton(selection)
+	
+elif len(selection)>2:
+	cmds.warning("Too many joints selected")
+else:
+	cmds.warning("Please select both start and end joints.")
