@@ -1,0 +1,281 @@
+from maya import cmds
+import json
+from PySide2 import QtWidgets, QtCore, QtGui
+from shiboken2 import wrapInstance
+import maya.OpenMayaUI as omui
+
+
+class MainUI(QtWidgets.QMainWindow):
+    def __init__(self,parent=None):
+        super(MainUI, self).__init__(parent)
+        self.setWindowTitle("CopySkinAuto")
+        self.setGeometry(100, 100, 400, 300)
+        self.data = []
+        
+        self.create_UI()#run stuff
+            
+            
+    def create_UI(self):
+        guide_tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+
+        proxyLayout = QtWidgets.QHBoxLayout()
+        
+        btnListLayout = QtWidgets.QVBoxLayout()
+        btnListLayout.addSpacing(20) 
+        btnAdd = QtWidgets.QPushButton()
+        btnAdd.setIcon(QtGui.QIcon(":addClip.png"))
+        btnAdd.clicked.connect(self.addMesh)
+        btnDel = QtWidgets.QPushButton()
+        btnDel.setIcon(QtGui.QIcon(":delete.png"))
+        btnDel.clicked.connect(self.removeMesh)
+        
+        btnUp = QtWidgets.QPushButton()
+        btnUp = QtWidgets.QPushButton("^")
+        btnUp.clicked.connect(self.moveList)
+        btnDown = QtWidgets.QPushButton()
+        btnDown = QtWidgets.QPushButton("v")
+        btnDown.clicked.connect(lambda: self.moveList(Down=True))
+        
+        
+        btnListLayout.addWidget(btnUp)
+        btnListLayout.addWidget(btnDown)
+        btnListLayout.addWidget(btnAdd)
+        btnListLayout.addStretch()
+        btnListLayout.addWidget(btnDel)
+        
+        proxyLayout.addLayout(btnListLayout)
+        
+        proxyListLayout = QtWidgets.QVBoxLayout()
+        proxyLabel = QtWidgets.QLabel("Proxy Mesh")
+        self.proxyListWidgets = QtWidgets.QListWidget()
+        self.proxyListWidgets.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.proxyListWidgets.itemSelectionChanged.connect(self.on_selected)
+
+
+        proxyListLayout.addWidget(proxyLabel)
+        proxyListLayout.addWidget(self.proxyListWidgets)
+        proxyLayout.addLayout(proxyListLayout)
+        dstListLayout = QtWidgets.QVBoxLayout()
+        dstLabel = QtWidgets.QLabel("Destination Mesh")
+        self.dstListWidgets = QtWidgets.QListWidget()
+        self.dstListWidgets.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+
+        dstListLayout.addWidget(dstLabel)
+        dstListLayout.addWidget(self.dstListWidgets)
+        
+        proxyLayout.addLayout(dstListLayout)
+        
+        layout.addLayout(proxyLayout)
+        
+        exeRadioLayout = QtWidgets.QHBoxLayout()
+        exeLabel = QtWidgets.QLabel("pick one e:")
+        exeRadio1 = QtWidgets.QRadioButton("All")
+        exeRadio2 = QtWidgets.QRadioButton("Selected")
+        exeRadio3 = QtWidgets.QRadioButton("CheckBox")
+        
+        exeRadioLayout.addWidget(exeLabel)
+        exeRadioLayout.addWidget(exeRadio1)
+        exeRadioLayout.addWidget(exeRadio2)
+        exeRadioLayout.addWidget(exeRadio3)
+        exeRadio2.setChecked(True)
+
+        layout.addLayout(exeRadioLayout)
+        
+        
+        exeLayout = QtWidgets.QHBoxLayout()
+        exeButton = QtWidgets.QPushButton("Execute")
+        exeLayout.addWidget(exeButton)
+        layout.addLayout(exeLayout)
+       
+       
+        guide_tab.setLayout(layout)
+        self.setCentralWidget(guide_tab) 
+        
+        self.load_saved_items()
+
+
+    def addMesh(self):
+        inputList = cmds.ls(selection=True)
+        if inputList == None or len(inputList) < 2 :
+            cmds.warning("please select 2 object")
+            return
+        else:
+            pass
+        
+        component_keys = ['.vtx[', '.e[', '.f[', '.map[', '.uvShell[','.shell[']
+        uniObj = set()
+        objects={}
+        allObjects = []
+
+        for input in inputList:
+            check = False
+            for key in component_keys:
+                if key in input:
+                    objName = input.split(key)[0]
+                    uniObj.add(objName)
+                    if len(uniObj) > 2:
+                        cmds.warning("More than 2 different objects detected!")
+                        break
+                    if objName not in objects:
+                        objects[objName] = []
+                    objects[objName].append(input)
+                    check = True
+                    break
+            if not check:
+                uniObj.add(input)
+                if len(uniObj) > 2:
+                    cmds.warning("More than 2 different objects detected!")
+                    break
+                if input not in objects:
+                    objects[input] = []
+                    
+        allObjects.append(objects)
+        self.saveShelves(allObjects)
+           
+    def removeMesh(self):
+        selection = self.proxyListWidgets.selectedItems()
+        if not selection:
+            cmds.warning("Select at least 1 ")
+            return
+        for item in selection:
+            current_row = self.proxyListWidgets.row(item)
+            self.data.pop(current_row)
+            self.save_list_to_file(self.data, True)
+            self.proxyListWidgets.takeItem(current_row)
+            self.dstListWidgets.takeItem(current_row)
+        pass
+
+    def execute(self):
+
+
+
+
+    def saveShelves(self, objects, save=True):
+        for obj in objects:
+            keys = list(obj.keys())
+            proxyMesh = keys[0]
+            destMesh = keys[1]
+            item = QtWidgets.QListWidgetItem(proxyMesh)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.Checked)
+            self.proxyListWidgets.addItem(item)
+            self.dstListWidgets.addItem(destMesh)
+                        
+        if save:
+            self.save_list_to_file(objects)
+            
+        pass
+
+
+    def moveList(self, Down  = False):
+        indices = []
+        conditions = {False: lambda index: index > 0,
+                      True: lambda index: index < self.proxyListWidgets.count() -1}
+        offset = 1 if Down else -1
+        selection = self.proxyListWidgets.selectedItems()
+        if not selection:
+            cmds.warning("select at least 1 stuff")
+            
+        else:
+            for each in selection:
+                index = self.proxyListWidgets.row(each)
+                if conditions[Down](index):
+                   self.data[index], self.data[index + offset] = self.data[index+offset], self.data[index]
+                   indices.append(index + offset)
+                else:
+                    indices.append(index)
+                    pass
+                  
+            self.save_list_to_file(self.data,remove=True)
+            self.refreshList(self.data)
+            
+
+            
+            for i in indices:
+                self.proxyListWidgets.item(i).setSelected(True)
+        
+    def on_selected(self):
+        selection = self.proxyListWidgets.selectedItems()
+        self.dstListWidgets.clearSelection()
+        if not selection:
+            pass
+        for selected in selection:
+            current_row = self.proxyListWidgets.row(selected)
+            itemA = self.dstListWidgets.item(current_row)
+            itemA.setSelected(True)
+        
+    def get_save_path(self):
+        scene_path = cmds.file(q=True, sceneName=True)
+        if not scene_path:
+            return None
+        dir_path = os.path.dirname(scene_path)
+        return os.path.join(dir_path, "transfer_skin_list.txt")
+        
+        
+    def save_list_to_file(self, objects, remove=False):
+        file_path = self.get_save_path()
+        folder = os.path.dirname(file_path)
+
+        if not folder:
+            cmds.warning(" No scene saved. Cannot save list.")
+            return
+            
+        if remove != True:
+            self.data.extend(objects)
+        file_path = os.path.join(folder, "transfer_skin_list.txt")
+        with open(file_path, "w") as f:
+            json.dump(self.data, f, indent=4)
+        
+        
+
+    def refreshList(self, objects):
+        self.proxyListWidgets.clear()
+        self.dstListWidgets.clear()
+        for obj in objects:
+            keys = list(obj.keys())
+            proxyMesh = keys[0]
+            destMesh = keys[1]
+            item = QtWidgets.QListWidgetItem(proxyMesh)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.Checked)
+            self.proxyListWidgets.addItem(item)
+            self.dstListWidgets.addItem(destMesh)
+        
+        pass
+        
+
+    def load_saved_items(self):
+        file_path = self.get_save_path()
+        folder = os.path.dirname(file_path)
+        full_path = os.path.join(folder, "transfer_skin_list.txt")
+
+        if not os.path.exists(full_path):
+            return []
+
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            with open(file_path, "r") as f:
+                self.data = json.load(f)
+                self.refreshList(self.data)
+        else:
+            self.data = [] 
+
+
+           
+def getWindow():
+      main_window_ptr = omui.MQtUtil.mainWindow()
+      return wrapInstance(int(main_window_ptr), QtWidgets.QMainWindow)
+           
+           
+def show_ui():
+     global MainUI_window
+     try:
+         MainUI_window.close()
+         MainUI_window.deleteLater()
+         
+     except:
+         pass
+     MainUI_window = MainUI(parent=getWindow())
+     MainUI_window.show()
+           
+show_ui()
