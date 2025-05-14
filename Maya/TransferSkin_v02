@@ -74,6 +74,11 @@ class MainUI(QtWidgets.QMainWindow):
         exeRadio2 = QtWidgets.QRadioButton("Selected")
         exeRadio3 = QtWidgets.QRadioButton("CheckBox")
         
+        self.exeRadioGrp = QtWidgets.QButtonGroup()
+        self.exeRadioGrp.addButton(exeRadio1)
+        self.exeRadioGrp.addButton(exeRadio2)
+        self.exeRadioGrp.addButton(exeRadio3)
+        
         exeRadioLayout.addWidget(exeLabel)
         exeRadioLayout.addWidget(exeRadio1)
         exeRadioLayout.addWidget(exeRadio2)
@@ -81,11 +86,11 @@ class MainUI(QtWidgets.QMainWindow):
         exeRadio2.setChecked(True)
 
         layout.addLayout(exeRadioLayout)
-        
-        
+
         exeLayout = QtWidgets.QHBoxLayout()
-        exeButton = QtWidgets.QPushButton("Execute")
-        exeLayout.addWidget(exeButton)
+        self.exeButton = QtWidgets.QPushButton("Execute")
+        self.exeButton.clicked.connect(self.execute)
+        exeLayout.addWidget(self.exeButton)
         layout.addLayout(exeLayout)
        
        
@@ -147,7 +152,58 @@ class MainUI(QtWidgets.QMainWindow):
         pass
 
     def execute(self):
+        checked = self.exeRadioGrp.checkedButton()
+        if checked == 1:
+            selection = self.proxyListWidgets.selectedItems()
+        elif checked == 0:
+            selection = [self.proxyListWidgets.item(i) for i in range(self.proxyListWidgets.count())]
+        else: 
+            selection = []
+            for i in range(self.proxyListWidgets.count()):
+                item = self.proxyListWidgets.item(i)
+                if item.checkState() == QtCore.Qt.Checked:
+                    selection.append(item)
+            cmds.warning("Still in development :(")
+        if not selection:
+            cmds.warning(" Nothing selected")
+            return
+            
+        for index in selection:
+            current_row = self.proxyListWidgets.row(index)
+            mesh = self.data[current_row]
 
+            proxyMesh = list(mesh.keys())[0]
+            dstMesh = list(mesh.keys())[1]
+            newDstMesh = dstMesh if mesh[dstMesh] == [] else mesh[dstMesh]
+            proxySC = self.get_skin_cluster(proxyMesh)
+            originalSC = self.get_skin_cluster(dstMesh)
+            
+            if not proxySC or not originalSC:
+                cmds.warning(f" No skinCluster found for {proxySC} or {originalSC}")
+                return
+            try:
+                cmds.setAttr(proxySC + ".envelope", 0)
+                cmds.setAttr(originalSC + ".envelope", 0)
+                cmds.select(proxyMesh)
+                cmds.select(newDstMesh, add=True)
+                cmds.copySkinWeights(noMirror=True, surfaceAssociation="closestPoint", influenceAssociation="closestJoint")
+                cmds.setAttr(proxySC + ".envelope", 1)
+                cmds.setAttr(originalSC + ".envelope", 1)
+                cmds.select(clear=True)
+                
+            except Exception as e:
+                print(f" Error: {e}")
+                break
+
+            pass
+
+    def get_skin_cluster(self, mesh_name):
+        history = cmds.listHistory(mesh_name)
+        skin_clusters = cmds.ls(history, type="skinCluster")
+        if skin_clusters:
+            return skin_clusters[0] 
+        else:
+            cmds.warning("Recheck Skin Cluster")
 
 
 
