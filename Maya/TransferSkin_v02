@@ -51,6 +51,9 @@ class MainUI(QtWidgets.QMainWindow):
         self.proxyListWidgets = QtWidgets.QListWidget()
         self.proxyListWidgets.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.proxyListWidgets.itemSelectionChanged.connect(self.on_selected)
+        self.proxyListWidgets.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.proxyListWidgets.customContextMenuRequested.connect(self.show_context_menu)
+
 
 
         proxyListLayout.addWidget(proxyLabel)
@@ -60,6 +63,8 @@ class MainUI(QtWidgets.QMainWindow):
         dstLabel = QtWidgets.QLabel("Destination Mesh")
         self.dstListWidgets = QtWidgets.QListWidget()
         self.dstListWidgets.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+        self.dstListWidgets.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.dstListWidgets.customContextMenuRequested.connect(self.show_context_menu)
 
         dstListLayout.addWidget(dstLabel)
         dstListLayout.addWidget(self.dstListWidgets)
@@ -315,6 +320,33 @@ class MainUI(QtWidgets.QMainWindow):
                 self.refreshList(self.data)
         else:
             self.data = [] 
+
+    def show_context_menu(self, position):
+        sender_widget = self.sender()
+        
+        item = sender_widget.itemAt(position)
+        if item:
+            index = sender_widget.row(item)
+            menu = QtWidgets.QMenu()
+            actSelect = menu.addAction("Select")
+            actReplace = menu.addAction("Replace")
+            
+            act = menu.exec_(sender_widget.mapToGlobal(position))
+            
+            mesh = self.data[index]
+            proxyMesh = list(mesh.keys())[0]
+            dstMesh = list(mesh.keys())[1]
+            newDstMesh = dstMesh if mesh[dstMesh] == [] else mesh[dstMesh]
+            
+            if act == actSelect:
+                if sender_widget == self.proxyListWidgets:
+                    cmds.select(proxyMesh)
+                else:
+                    cmds.select(newDstMesh)
+                    
+            elif act == action_info:
+                pass
+                
 
 
            
