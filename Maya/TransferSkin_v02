@@ -103,15 +103,17 @@ class MainUI(QtWidgets.QMainWindow):
         self.setCentralWidget(guide_tab) 
         
         self.load_saved_items()
+        
 
 
-    def addMesh(self):
+    def addMesh(self, replace =False):
         inputList = cmds.ls(selection=True)
-        if inputList == None or len(inputList) < 2 :
-            cmds.warning("please select 2 object")
-            return
-        else:
-            pass
+        if replace == False:
+            if inputList == None or len(inputList) < 2 :
+                cmds.warning("please select 2 object")
+                return
+            else:
+                pass
         
         component_keys = ['.vtx[', '.e[', '.f[', '.map[', '.uvShell[','.shell[']
         uniObj = set()
@@ -140,8 +142,15 @@ class MainUI(QtWidgets.QMainWindow):
                 if input not in objects:
                     objects[input] = []
                     
+        
+        if "checker" not in objects:
+            objects["checker"] = True
+            
         allObjects.append(objects)
-        self.saveShelves(allObjects)
+        if not replace:
+            self.saveShelves(allObjects)
+        else:
+            return(objects)
            
     def removeMesh(self):
         selection = self.proxyListWidgets.selectedItems()
@@ -157,18 +166,23 @@ class MainUI(QtWidgets.QMainWindow):
         pass
 
     def execute(self):
-        checked = self.exeRadioGrp.checkedButton()
-        if checked == 1:
+        checked = self.exeRadioGrp.checkedId()
+        print(checked)
+        if checked == -2:
             selection = self.proxyListWidgets.selectedItems()
-        elif checked == 0:
+        elif checked == -3:
             selection = [self.proxyListWidgets.item(i) for i in range(self.proxyListWidgets.count())]
-        else: 
+        elif checked == -4: 
             selection = []
             for i in range(self.proxyListWidgets.count()):
                 item = self.proxyListWidgets.item(i)
                 if item.checkState() == QtCore.Qt.Checked:
                     selection.append(item)
-            cmds.warning("Still in development :(")
+                    
+        else:
+            cmds.warning("UHHH, this shouldn't happen:(")
+            return
+            
         if not selection:
             cmds.warning(" Nothing selected")
             return
@@ -211,15 +225,26 @@ class MainUI(QtWidgets.QMainWindow):
             cmds.warning("Recheck Skin Cluster")
 
 
-
     def saveShelves(self, objects, save=True):
         for obj in objects:
             keys = list(obj.keys())
             proxyMesh = keys[0]
             destMesh = keys[1]
+            checker = keys[2]
+            check = obj[checker]
+            
+            self.proxyListWidgets.blockSignals(True)
             item = QtWidgets.QListWidgetItem(proxyMesh)
             item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
-            item.setCheckState(QtCore.Qt.Checked)
+            
+            if check == True:
+                item.setCheckState(QtCore.Qt.Checked)
+            else:
+                item.setCheckState(QtCore.Qt.Unchecked)
+                
+            self.proxyListWidgets.blockSignals(False)
+            self.proxyListWidgets.itemChanged.connect(self.handleItemCheckChange)
+                
             self.proxyListWidgets.addItem(item)
             self.dstListWidgets.addItem(destMesh)
                         
@@ -227,6 +252,17 @@ class MainUI(QtWidgets.QMainWindow):
             self.save_list_to_file(objects)
             
         pass
+
+
+    def handleItemCheckChange(self,item):
+        currentRow = self.proxyListWidgets.row(item)
+        check = True if item.checkState() == QtCore.Qt.Checked else False
+        self.data[currentRow]["checker"] = check
+        print(self.data[currentRow])
+        self.save_list_to_file(self.data,remove=True)
+        self.refreshList(self.data)
+        
+        
 
 
     def moveList(self, Down  = False):
@@ -297,9 +333,13 @@ class MainUI(QtWidgets.QMainWindow):
             keys = list(obj.keys())
             proxyMesh = keys[0]
             destMesh = keys[1]
+            checker = keys[2]
+            check = obj[checker]
             item = QtWidgets.QListWidgetItem(proxyMesh)
-            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
-            item.setCheckState(QtCore.Qt.Checked)
+            if check == True:
+                item.setCheckState(QtCore.Qt.Checked)
+            else:
+                item.setCheckState(QtCore.Qt.Unchecked)
             self.proxyListWidgets.addItem(item)
             self.dstListWidgets.addItem(destMesh)
         
@@ -336,18 +376,56 @@ class MainUI(QtWidgets.QMainWindow):
             mesh = self.data[index]
             proxyMesh = list(mesh.keys())[0]
             dstMesh = list(mesh.keys())[1]
-            newDstMesh = dstMesh if mesh[dstMesh] == [] else mesh[dstMesh]
+            a = mesh[dstMesh]
+            if mesh[dstMesh] == []:
+                newDstMesh = dstMesh
+                check = True
+            else:
+                newDstMesh = mesh[dstMesh]
+                check = False
+
             
             if act == actSelect:
                 if sender_widget == self.proxyListWidgets:
                     cmds.select(proxyMesh)
                 else:
                     cmds.select(newDstMesh)
-                    
-            elif act == action_info:
+                    if check == False:
+                        cmds.selectMode(component=True)
+            
+            
+            
+            elif act == actReplace:
+                combining = {}
+                if sender_widget == self.proxyListWidgets:
+                    result = self.addMesh(True)
+                    key = list(result.keys())[0]
+                    value = result[key]
+                    combining[key] = value
+                    combining[dstMesh] = mesh[dstMesh]
+                    self.data[index] = combining
+                    self.save_list_to_file(self.data, True)
+                    self.refreshList(self.data)
+                
+                else:
+                    result = self.addMesh(True)
+                    key = list(result.keys())[0]
+                    value = result[key]
+                    if check == True:
+                        combining[proxyMesh] = []
+                        combining[key] = []
+                        self.data[index] = combining
+                    else:
+                        combining[proxyMesh] = []
+                        combining[dstMesh] = mesh[newDstMesh]
+                        combining[key] = value
+
+                    self.save_list_to_file(self.data, True)
+                    self.refreshList(self.data)
+
+                    pass
                 pass
                 
-
 
            
 def getWindow():
