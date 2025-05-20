@@ -167,12 +167,9 @@ class MainUI(QtWidgets.QMainWindow):
 
     def execute(self):
         checked = self.exeRadioGrp.checkedId()
-        print(checked)
         if checked == -2:
-            print("all")
             selection = [self.proxyListWidgets.item(i) for i in range(self.proxyListWidgets.count())]
         elif checked == -3:
-            print("allselected")
             selection = self.proxyListWidgets.selectedItems()
             
         elif checked == -4: 
