@@ -169,9 +169,12 @@ class MainUI(QtWidgets.QMainWindow):
         checked = self.exeRadioGrp.checkedId()
         print(checked)
         if checked == -2:
-            selection = self.proxyListWidgets.selectedItems()
-        elif checked == -3:
+            print("all")
             selection = [self.proxyListWidgets.item(i) for i in range(self.proxyListWidgets.count())]
+        elif checked == -3:
+            print("allselected")
+            selection = self.proxyListWidgets.selectedItems()
+            
         elif checked == -4: 
             selection = []
             for i in range(self.proxyListWidgets.count()):
@@ -376,7 +379,8 @@ class MainUI(QtWidgets.QMainWindow):
             mesh = self.data[index]
             proxyMesh = list(mesh.keys())[0]
             dstMesh = list(mesh.keys())[1]
-            a = mesh[dstMesh]
+            check = list(mesh.keys())[2]
+            checkerValue = mesh[check]
             if mesh[dstMesh] == []:
                 newDstMesh = dstMesh
                 check = True
@@ -403,6 +407,7 @@ class MainUI(QtWidgets.QMainWindow):
                     value = result[key]
                     combining[key] = value
                     combining[dstMesh] = mesh[dstMesh]
+                    combining[check] = checkerValue
                     self.data[index] = combining
                     self.save_list_to_file(self.data, True)
                     self.refreshList(self.data)
@@ -420,6 +425,7 @@ class MainUI(QtWidgets.QMainWindow):
                         combining[dstMesh] = mesh[newDstMesh]
                         combining[key] = value
 
+                    combining[check] = checkerValue
                     self.save_list_to_file(self.data, True)
                     self.refreshList(self.data)
 
