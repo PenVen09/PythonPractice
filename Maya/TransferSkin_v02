@@ -378,6 +378,8 @@ class MainUI(QtWidgets.QMainWindow):
             dstMesh = list(mesh.keys())[1]
             check = list(mesh.keys())[2]
             checkerValue = mesh[check]
+            
+            
             if mesh[dstMesh] == []:
                 newDstMesh = dstMesh
                 check = True
@@ -404,25 +406,25 @@ class MainUI(QtWidgets.QMainWindow):
                     value = result[key]
                     combining[key] = value
                     combining[dstMesh] = mesh[dstMesh]
-                    combining[check] = checkerValue
+                    combining["checker"] = checkerValue
                     self.data[index] = combining
                     self.save_list_to_file(self.data, True)
                     self.refreshList(self.data)
                 
                 else:
+                    value = []
                     result = self.addMesh(True)
                     key = list(result.keys())[0]
                     value = result[key]
-                    if check == True:
+
+                    if value == []:
                         combining[proxyMesh] = []
                         combining[key] = []
-                        self.data[index] = combining
                     else:
                         combining[proxyMesh] = []
-                        combining[dstMesh] = mesh[newDstMesh]
                         combining[key] = value
-
-                    combining[check] = checkerValue
+                    combining["checker"] = checkerValue
+                    self.data[index] = combining
                     self.save_list_to_file(self.data, True)
                     self.refreshList(self.data)
 
