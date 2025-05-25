@@ -1,0 +1,336 @@
+templateName = ["prefixes", "baseName","Suffixes"]
+baseName = "ikmasn"
+prefixes = "abc"
+suffixes = "a"
+padding = 2
+padPos = 0
+startNum = 1
+sideList = ["L","R","C"]
+side = 0
+sidePos = 2
+selectType = 0
+selections = cmds.ls(selection=True)
+
+from PySide2 import QtWidgets, QtCore, QtGui
+from shiboken2 import wrapInstance
+import maya.OpenMayaUI as omui
+
+
+
+class RenameToolUI(QtWidgets.QMainWindow):
+    def __init__(self, parent=None):
+        super(RenameToolUI, self).__init__(parent)
+        self.setWindowTitle("Custom Rename Tool")
+        self.setFixedSize(400, 600)
+        self.buildUI()
+        self.show()
+
+
+        
+    def buildUI(self):
+        preview_text = f"{prefixes}_{baseName}_{suffixes}"
+        mainLayout = QtWidgets.QVBoxLayout()
+
+        # Selection Group
+        label = QtWidgets.QLabel("------------------------ Selection Options ----------------------------")
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        mainLayout.addWidget(label)
+        selection_group = QtWidgets.QGroupBox("Selection:")
+        sel_layout = QtWidgets.QHBoxLayout()
+        self.selectRadioGrp = QtWidgets.QButtonGroup(self)
+        
+        for i, text in enumerate(["Selected", "Hierarchy", "All"]):
+            rb = QtWidgets.QRadioButton(text)
+            sel_layout.addWidget(rb)
+            self.selectRadioGrp.addButton(rb, i)
+            
+        self.selectRadioGrp.buttons()[0].setChecked(True)
+        selection_group.setLayout(sel_layout)
+        mainLayout.addWidget(selection_group)
+        
+        mainLayout.addWidget(self._separator())
+        label = QtWidgets.QLabel("------------------------ Side Options ----------------------------")
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        mainLayout.addWidget(label)
+
+        self.sideCheck = QtWidgets.QCheckBox("Enable Side")
+        self.sideCheck.setChecked(True)
+        mainLayout.addWidget(self.sideCheck)
+
+        # Side Group
+        side_group = QtWidgets.QGroupBox("Side:")
+        side_layout = QtWidgets.QHBoxLayout()
+        self.sideRadioGrp = QtWidgets.QButtonGroup(self)
+        
+        for i, text in enumerate([ "L", "R", "C"]):
+            rb = QtWidgets.QRadioButton(text)
+            side_layout.addWidget(rb)
+            self.sideRadioGrp.addButton(rb, i)
+        self.sideRadioGrp.buttons()[0].setChecked(True)
+        side_group.setLayout(side_layout)
+        
+        
+        
+        self.sideCheck.toggled.connect(lambda state: self._toggleRadio(self.sideRadioGrp, state))
+        mainLayout.addWidget(side_group)
+
+        # Side Slider
+        pos_layout = QtWidgets.QHBoxLayout()
+        pos_layout.addStretch()
+        pos_label = QtWidgets.QLabel("Position:       ")
+        self.sideSlider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.sideSlider.setRange(1, 5)
+        self.sideSlider.setValue(2)
+        self.sideSlider.setFixedWidth(300)
+        pos_layout.addWidget(pos_label)
+        pos_layout.addWidget(self.sideSlider)
+        pos_layout.addStretch()
+        mainLayout.addLayout(pos_layout)
+
+        # Text Fields
+        mainLayout.addWidget(self._separator())
+        label = QtWidgets.QLabel("------------------------ Main ----------------------------")
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        mainLayout.addWidget(label)
+        self.prefixesRow = self._textField_and_dropdown("Prefixes:", 120, "prefixesNameField", ["RIG", "SM", "GEO", "CAM"], "enter prefixes")
+        mainLayout.addLayout(self.prefixesRow)
+        
+        tmpLayout = QtWidgets.QHBoxLayout()
+        tmpLayout.addLayout(self._labeled_textfield("Base Name:", 120, "baseNameField", "base or search for"))
+
+        
+        
+        self.replaceCheck = QtWidgets.QCheckBox("R")
+        
+        self.replaceCheck.setChecked(False)
+        self.replaceTextField = QtWidgets.QLineEdit()
+        self.replaceTextField.setFixedWidth(120)
+        self.replaceTextField.setPlaceholderText("Replace with")
+        self.replaceTextField.setEnabled(False)
+        self.replaceTextField.setStyleSheet("color: grey; background-color: #555555;")
+
+       
+        self.replaceCheck.toggled.connect(lambda state: self._toggle_Field(self.replaceTextField, state))
+        
+        tmpLayout.addWidget(self.replaceCheck)
+        tmpLayout.addWidget(self.replaceTextField)
+        tmpLayout.addStretch()
+        mainLayout.addLayout(tmpLayout)
+        
+        
+        mainLayout.addLayout(self._textField_and_dropdown("Suffixes:", 120, "suffixesNameField", ["Auto Suffixes","JNT", "OFFSET", "CTRL", "GRP"], "enter suffixes"))
+        
+
+        # Numbering
+        mainLayout.addWidget(self._separator())
+        label = QtWidgets.QLabel("------------------------ Numbering ----------------------------")
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        mainLayout.addWidget(label)
+        self.numberCheck = QtWidgets.QCheckBox("Enable Numbering")
+        self.numberCheck.setChecked(True)
+        mainLayout.addWidget(self.numberCheck)
+
+        startnum_layout = QtWidgets.QHBoxLayout()
+        startnum_label = QtWidgets.QLabel("Start Number:")
+        self.startNumField = QtWidgets.QSpinBox()
+        self.startNumField.setMinimum(0)
+        self.startNumField.setValue(0)
+        startnum_layout.addWidget(startnum_label)
+        startnum_layout.addWidget(self.startNumField)
+        startnum_layout.addStretch()
+        mainLayout.addLayout(startnum_layout)
+
+        # Padding Position Slider
+        padpos_layout = QtWidgets.QHBoxLayout()
+        padpos_layout.addStretch()
+        padpos_label = QtWidgets.QLabel("Padding Pos:    ")
+        self.paddingPosition = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.paddingPosition.setRange(1, 5)
+        self.paddingPosition.setValue(2)
+        self.paddingPosition.setFixedWidth(300)
+        padpos_layout.addWidget(padpos_label)
+        padpos_layout.addWidget(self.paddingPosition)
+        padpos_layout.addStretch()
+        mainLayout.addLayout(padpos_layout)
+
+        # Preview Field
+        preview_layout = QtWidgets.QHBoxLayout()
+        preview_label = QtWidgets.QLabel("Preview:")
+        self.previewField = QtWidgets.QLineEdit()
+        self.previewField.setReadOnly(True)
+        self.previewField.setFixedWidth(300)
+        self.previewField.setStyleSheet("background-color: #555555;")
+        self.previewField.setText(preview_text)
+        preview_layout.addWidget(preview_label)
+        preview_layout.addWidget(self.previewField)
+        mainLayout.addLayout(preview_layout)
+
+        # Buttons
+        mainLayout.addStretch()
+        exeLayout = QtWidgets.QHBoxLayout()
+        self.renameButton = QtWidgets.QPushButton("Rename")
+        self.resetButton = QtWidgets.QPushButton("Reset")
+        self.resetButton.setStyleSheet("background-color: red; color: white;")
+        exeLayout.addWidget(self.renameButton)
+        exeLayout.addWidget(self.resetButton)
+        mainLayout.addLayout(exeLayout)
+        
+        
+        miniLayout =  QtWidgets.QHBoxLayout()
+        delButtonsLayout = QtWidgets.QHBoxLayout()
+        label1 = QtWidgets.QLabel("Remove end")
+        endNumField = QtWidgets.QSpinBox()
+        endNumField.setMinimum(0)
+        endNumField.setValue(0)
+
+        btnDel = QtWidgets.QPushButton()
+        btnDel.setIcon(QtGui.QIcon(":delete.png"))
+        delButtonsLayout.addWidget(label1)
+        delButtonsLayout.addWidget(endNumField)
+        delButtonsLayout.addWidget(btnDel)
+
+        del02ButtonsLayout = QtWidgets.QHBoxLayout()
+        label2 = QtWidgets.QLabel("Remove all numbers")
+        btnDel02 = QtWidgets.QPushButton()
+        btnDel02.setIcon(QtGui.QIcon(":delete.png"))
+        del02ButtonsLayout.addWidget(label2)
+        del02ButtonsLayout.addWidget(btnDel02)
+        
+
+        miniLayout.addLayout(delButtonsLayout)
+        miniLayout.addLayout(del02ButtonsLayout)
+        mainLayout.addLayout(miniLayout)
+        
+        
+        
+        autoexeLayout = QtWidgets.QHBoxLayout()
+        self.autoSuffixesButton = QtWidgets.QPushButton("Auto Suffixes")
+        
+        
+        autoexeLayout.addWidget(self.autoSuffixesButton)
+        mainLayout.addLayout(autoexeLayout)
+
+        central_widget = QtWidgets.QWidget()
+        central_widget.setLayout(mainLayout)
+        self.setCentralWidget(central_widget)
+        
+        
+
+    def _labeled_textfield(self, label_text, width, object_name, placeholderText):
+        layout = QtWidgets.QHBoxLayout()
+        label = QtWidgets.QLabel(label_text)
+        label.setFixedWidth(80)
+        field = QtWidgets.QLineEdit()
+        field.setObjectName(object_name)
+        field.setFixedWidth(width)
+        field.setPlaceholderText(placeholderText)
+        layout.addWidget(label)
+        layout.addWidget(field)
+        
+        return layout
+
+
+    def _separator(self):
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        line.setStyleSheet("margin-top: 5px; margin-bottom: 5px;")
+        return line
+        
+        
+    def _labeled_dropdown(self, label_text, options):
+        layout = QtWidgets.QHBoxLayout()
+        label = QtWidgets.QLabel(label_text)
+        label.setFixedWidth(80)
+        dropdown = QtWidgets.QComboBox()
+        dropdown.addItems(options)
+        dropdown.setFixedWidth(200)
+        layout.addWidget(label)
+        layout.addWidget(dropdown)
+        layout.addStretch()
+        return layout
+
+    def _toggle_Field(self, fieldGrp, enabled):
+        fieldGrp.setEnabled(enabled)
+        if enabled:
+            fieldGrp.setStyleSheet("")
+        else:
+            fieldGrp.setStyleSheet("background-color: #555555; color: #888888;")
+
+
+    def _toggleRadio(self,radGrp, enabled):
+        for rb in radGrp.buttons():
+            rb.setEnabled(enabled)
+            if enabled:
+                rb.setStyleSheet("")  # normal color
+            else:
+                rb.setStyleSheet("color: #555555;")  # dark grey color
+        
+
+    def _textField_and_dropdown(self, label_text, field_width, field_name, dropdown_items, placeholderText):
+        layout = QtWidgets.QHBoxLayout()
+    
+
+        label = QtWidgets.QLabel(label_text)
+        label.setFixedWidth(80)
+        
+
+        field = QtWidgets.QLineEdit()
+        field.setObjectName(field_name)
+        field.setFixedWidth(field_width)
+        field.setPlaceholderText(placeholderText)
+        field.textChanged.connect(self.updatePreview)
+    
+        dropdown = QtWidgets.QComboBox()
+        dropdown.addItem("Select an option")
+        dropdown.addItems(dropdown_items)
+        dropdown.setFixedWidth(160)
+    
+        layout.addWidget(label)
+        layout.addWidget(field)
+        layout.addWidget(dropdown)
+        layout.addStretch()
+        return layout
+
+    def updatePreview(self):
+        preview = "_".join(templateName)
+        self.previewField.setText(preview)
+
+
+    def rename(self):
+        for i, obj in enumerate(selections):
+            num = str(startNum + i).zfill(padding)
+            baseName = f"{prefixes}_{baseName}_{suffixes}"
+            parts = baseName.split("_")
+            padPosClamped = max(1, min(len(parts), padPos))
+            sidePosClamped = max(0, min(len(parts), sidePos))
+            inserts = [(padPosClamped, num),
+                      (sidePosClamped, sideList[side])
+                      ]
+            inserts_sorted = sorted(inserts, reverse=True)
+            for insert_index, insert_value in inserts_sorted:
+                parts.insert(insert_index, insert_value)
+                
+            objNewName = "_".join(parts)
+        
+            cmds.rename(obj, objNewName)
+            
+
+def getWindow():
+    main_window_ptr = omui.MQtUtil.mainWindow()
+    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
+    
+def show_rename_tool():
+    global rename_tool_ui
+    try:
+        rename_tool_ui.close()
+        rename_tool_ui.deleteLater()
+    except:
+        pass
+    
+    parent = getWindow()
+    rename_tool_ui = RenameToolUI(parent)
+    rename_tool_ui.show()
+      
+      
+show_rename_tool()
