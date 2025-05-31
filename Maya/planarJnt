@@ -1,0 +1,44 @@
+from maya import cmds
+
+selJnt = cmds.ls(selection=True, type="joint")
+if len(selJnt) == 3:
+    planarPlane = cmds.polyPlane(    
+                name="tmpPlanarPlane",
+                width=5,
+                height=5,
+                subdivisionsX=1,
+                subdivisionsY=1)[0]
+    cmds.rotate(0, 0, '-90', planarPlane)
+    cmds.makeIdentity(planarPlane)
+                
+    planarLoc = cmds.spaceLocator(
+                name = "tmpPlanarLoc"
+                )[0]
+    cmds.matchTransform(planarPlane, selJnt[0])
+    cmds.matchTransform(planarLoc, selJnt[0])
+    cmds.move( 0, 0, 3, planarLoc,  relative=True, objectSpace=True)
+    
+    
+    tmpAim= cmds.aimConstraint(selJnt[2], planarPlane,aim = (1,0,0), wu = (0,0, 1), wut="object",wuo=planarLoc, mo=False)
+    cmds.delete(tmpAim)
+    cmds.parent(planarLoc, planarPlane)
+    
+    for jnt in selJnt:
+        cmds.parent(jnt, planarPlane)
+        cmds.setAttr(f"{jnt}.translateY", 0)
+        cmds.parent(jnt, world=True)
+
+    tmpAim1= cmds.aimConstraint(selJnt[1], selJnt[0],aim = (1,0,0), upVector = (0,0, 1), wut="object",wuo=planarLoc, mo=False)
+    cmds.delete(tmpAim1)
+    tmpAim2= cmds.aimConstraint(selJnt[2], selJnt[1],aim = (1,0,0), upVector = (0,0, 1), wu = (0,0, 1), wut="objectrotation",wuo=selJnt[0], mo=False)
+    cmds.delete(tmpAim2)
+
+    cmds.parent(selJnt[2], selJnt[1])
+    cmds.parent(selJnt[1], selJnt[0])
+    
+    for jnt in selJnt:
+        cmds.makeIdentity(jnt, apply=True, r=True)
+
+    
+else:
+    cmds.warning("Select only 3 joints")
