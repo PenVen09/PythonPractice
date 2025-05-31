@@ -1,44 +1,119 @@
-from maya import cmds
+from PySide2 import QtWidgets, QtCore, QtGui
+from shiboken2 import wrapInstance
+import maya.OpenMayaUI as omui
 
-selJnt = cmds.ls(selection=True, type="joint")
-if len(selJnt) == 3:
-    planarPlane = cmds.polyPlane(    
-                name="tmpPlanarPlane",
-                width=5,
-                height=5,
-                subdivisionsX=1,
-                subdivisionsY=1)[0]
-    cmds.rotate(0, 0, '-90', planarPlane)
-    cmds.makeIdentity(planarPlane)
+
+
+
+class venJointTooling(QtWidgets.QMainWindow):
+    def __init__(self, parent=None):
+        super(venJointTooling, self).__init__(parent)
+        self.setWindowTitle("Ven Joint Tooling")
+        self.setFixedSize(400, 600)
+        self.createUI()
+        self.show()
+        self.selJnt = []
+        
+    def createUI(self):
+        central_widget = QtWidgets.QWidget()
+        self.setCentralWidget(central_widget)
+
+        # Create your main layout on the central widget
+        layout = QtWidgets.QVBoxLayout(central_widget)
+        layout.setAlignment(QtCore.Qt.AlignTop)
+
+        label = QtWidgets.QLabel("Make Joint Planar:")
+        font = label.font()
+        font.setBold(True)
+        label.setFont(font)
+        layout.addWidget(label)
+
+
+        #layout.addSpacing(10)
+
+        btn_layout = QtWidgets.QHBoxLayout()
+        self.btn1 = QtWidgets.QPushButton("Step 1")
+        self.btn2 = QtWidgets.QPushButton("Step 2")
+
+        btn_layout.addWidget(self.btn1)
+        btn_layout.addWidget(self.btn2)
+
+        layout.addLayout(btn_layout)
+
+        self.btn1.clicked.connect(self.button1_action)
+        self.btn2.clicked.connect(self.button2_action)
+
+        
+    def button1_action(*args):
+        self.selJnt = cmds.ls(selection=True, type="joint")
+        if len(self.selJnt) == 3:
+            planarPlane = cmds.polyPlane(    
+                        name="tmpPlanarPlane",
+                        width=30,
+                        height=30,
+                        subdivisionsX=1,
+                        subdivisionsY=1)[0]
+            cmds.rotate(0, 0, '-90', planarPlane)
+            cmds.makeIdentity(planarPlane)
+                        
+            planarLoc = cmds.spaceLocator(
+                        name = "tmpPlanarLoc"
+                        )[0]
+            
+            cmds.matchTransform(planarPlane, self.selJnt[0])
+            pos = cmds.xform(self.selJnt[0], query=True, translation=True, worldSpace=True)
+            cmds.xform(planarLoc, translation=pos, worldSpace=True)
+            
+            
+            
+            tmpAim= cmds.aimConstraint(self.selJnt[2], planarPlane,aim = (1,0,0), wu = (0,0, 1), wut="object",wuo=planarLoc, mo=False)
+            cmds.delete(tmpAim)
+            cmds.parent(planarLoc, planarPlane)
+            cmds.rotate(0,0,0, planarLoc)
+            cmds.move( 0, 30, 0, planarLoc, relative=True, worldSpace=False,objectSpace=True)
+            
+            for jnt in self.selJnt:
+                cmds.parent(jnt, planarPlane)
+                cmds.setAttr(f"{jnt}.translateY", 0)
+                cmds.setAttr(f"{jnt}.translateY", lock=True)
                 
-    planarLoc = cmds.spaceLocator(
-                name = "tmpPlanarLoc"
-                )[0]
-    cmds.matchTransform(planarPlane, selJnt[0])
-    cmds.matchTransform(planarLoc, selJnt[0])
-    cmds.move( 0, 0, 3, planarLoc,  relative=True, objectSpace=True)
+        else:
+            cmds.warning("Select only 3 joints")
     
+    def button2_action(*args):
+        for jnt in self.selJnt:
+            cmds.setAttr(f"{jnt}.translateY", lock=False)
+            cmds.setAttr(f"{jnt}.translateY", 0)
+            cmds.parent(jnt, world=True)
     
-    tmpAim= cmds.aimConstraint(selJnt[2], planarPlane,aim = (1,0,0), wu = (0,0, 1), wut="object",wuo=planarLoc, mo=False)
-    cmds.delete(tmpAim)
-    cmds.parent(planarLoc, planarPlane)
+        tmpAim1= cmds.aimConstraint(self.selJnt[1], self.selJnt[0],aim = (1,0,0), upVector = (0,0, 1), wut="object",wuo=planarLoc, mo=False)
+        cmds.delete(tmpAim1)
+        tmpAim2= cmds.aimConstraint(self.selJnt[2], self.selJnt[1],aim = (1,0,0), upVector = (0,0, 1), wu = (0,0, 1), wut="objectrotation", wuo=self.selJnt[0], mo=False)
+        cmds.delete(tmpAim2)
     
-    for jnt in selJnt:
-        cmds.parent(jnt, planarPlane)
-        cmds.setAttr(f"{jnt}.translateY", 0)
-        cmds.parent(jnt, world=True)
+        cmds.parent(self.selJnt[2], self.selJnt[1])
+        cmds.parent(self.selJnt[1], self.selJnt[0])
+        
+        for jnt in self.selJnt: 
+            cmds.makeIdentity(jnt, apply=True, r=True)
 
-    tmpAim1= cmds.aimConstraint(selJnt[1], selJnt[0],aim = (1,0,0), upVector = (0,0, 1), wut="object",wuo=planarLoc, mo=False)
-    cmds.delete(tmpAim1)
-    tmpAim2= cmds.aimConstraint(selJnt[2], selJnt[1],aim = (1,0,0), upVector = (0,0, 1), wu = (0,0, 1), wut="objectrotation",wuo=selJnt[0], mo=False)
-    cmds.delete(tmpAim2)
 
-    cmds.parent(selJnt[2], selJnt[1])
-    cmds.parent(selJnt[1], selJnt[0])
-    
-    for jnt in selJnt:
-        cmds.makeIdentity(jnt, apply=True, r=True)
 
+def getWindow():
+    main_window_ptr = omui.MQtUtil.mainWindow()
+    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
     
-else:
-    cmds.warning("Select only 3 joints")
+def show_jointTooling():
+    global jointToolingUI
+    try:
+        jointToolingUI.close()
+        jointToolingUI.deleteLater()
+    except:
+        pass
+    
+    parent = getWindow()
+    jointToolingUI = venJointTooling(parent)
+    jointToolingUI.show()
+      
+      
+show_jointTooling()
