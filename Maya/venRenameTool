@@ -1,13 +1,13 @@
 templateName = ["prefixes", "baseName","Suffixes"]
-baseName = "ikmasn"
-prefixes = "abc"
-suffixes = "a"
+baseName = ""
+prefixes = ""
+suffixes = ""
 padding = 2
-padPos = 0
+padPos = 1
 startNum = 1
 sideList = ["L","R","C"]
 side = 0
-sidePos = 2
+sidePos = 1
 selectType = 0
 selections = cmds.ls(selection=True)
 
@@ -20,15 +20,21 @@ import maya.OpenMayaUI as omui
 class RenameToolUI(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super(RenameToolUI, self).__init__(parent)
-        self.setWindowTitle("Custom Rename Tool")
+        self.setWindowTitle("Ven Rename Tool")
         self.setFixedSize(400, 600)
+        
+        self.templateName = f"{prefixes or 'prefix'}|{baseName or 'baseName'}|{suffixes or 'suffix'}"
+        templateParts = self.templateName.split("|")
+        self.previewText =  "_".join(templateParts)
+
         self.buildUI()
         self.show()
+        self.sideUpdateRename()
+        
 
 
         
     def buildUI(self):
-        preview_text = f"{prefixes}_{baseName}_{suffixes}"
         mainLayout = QtWidgets.QVBoxLayout()
 
         # Selection Group
@@ -67,11 +73,14 @@ class RenameToolUI(QtWidgets.QMainWindow):
             side_layout.addWidget(rb)
             self.sideRadioGrp.addButton(rb, i)
         self.sideRadioGrp.buttons()[0].setChecked(True)
+        self.sideRadioGrp.buttonClicked.connect(self.sideUpdateRename)
+
         side_group.setLayout(side_layout)
         
         
         
         self.sideCheck.toggled.connect(lambda state: self._toggleRadio(self.sideRadioGrp, state))
+        self.sideCheck.toggled.connect(self.sideUpdateRename)
         mainLayout.addWidget(side_group)
 
         # Side Slider
@@ -79,12 +88,13 @@ class RenameToolUI(QtWidgets.QMainWindow):
         pos_layout.addStretch()
         pos_label = QtWidgets.QLabel("Position:       ")
         self.sideSlider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.sideSlider.setRange(1, 5)
+        self.sideSlider.setRange(0, 5)
         self.sideSlider.setValue(2)
         self.sideSlider.setFixedWidth(300)
         pos_layout.addWidget(pos_label)
         pos_layout.addWidget(self.sideSlider)
         pos_layout.addStretch()
+        self.sideSlider.valueChanged.connect(self.sideUpdateRename)
         mainLayout.addLayout(pos_layout)
 
         # Text Fields
@@ -121,51 +131,62 @@ class RenameToolUI(QtWidgets.QMainWindow):
         mainLayout.addLayout(self._textField_and_dropdown("Suffixes:", 120, "suffixesNameField", ["Auto Suffixes","JNT", "OFFSET", "CTRL", "GRP"], "enter suffixes"))
         
 
-        # Numbering
         mainLayout.addWidget(self._separator())
         label = QtWidgets.QLabel("------------------------ Numbering ----------------------------")
         label.setAlignment(QtCore.Qt.AlignCenter)
         mainLayout.addWidget(label)
         self.numberCheck = QtWidgets.QCheckBox("Enable Numbering")
-        self.numberCheck.setChecked(True)
+        self.numberCheck.setChecked(False)
         mainLayout.addWidget(self.numberCheck)
+        self.numberCheck.toggled.connect(self.sideUpdateRename)
 
-        startnum_layout = QtWidgets.QHBoxLayout()
-        startnum_label = QtWidgets.QLabel("Start Number:")
+        startNumLayout = QtWidgets.QHBoxLayout()
+        startNumLabel = QtWidgets.QLabel("Start Number:")
         self.startNumField = QtWidgets.QSpinBox()
         self.startNumField.setMinimum(0)
         self.startNumField.setValue(0)
-        startnum_layout.addWidget(startnum_label)
-        startnum_layout.addWidget(self.startNumField)
-        startnum_layout.addStretch()
-        mainLayout.addLayout(startnum_layout)
+        startNumLayout.addWidget(startNumLabel)
+        startNumLayout.addWidget(self.startNumField)
+        
+        
 
-        # Padding Position Slider
+        numPadLabel = QtWidgets.QLabel("Number Padding:")
+        self.numPadField = QtWidgets.QSpinBox()
+        self.numPadField.setMinimum(0)
+        self.numPadField.setValue(0)
+        startNumLayout .addWidget(numPadLabel)
+        startNumLayout.addWidget(self.numPadField)
+        
+        
+        self.startNumField.valueChanged.connect(self.sideUpdateRename)
+        self.numPadField.valueChanged.connect(self.sideUpdateRename)
+        mainLayout.addLayout(startNumLayout)
+
+
         padpos_layout = QtWidgets.QHBoxLayout()
         padpos_layout.addStretch()
         padpos_label = QtWidgets.QLabel("Padding Pos:    ")
         self.paddingPosition = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.paddingPosition.setRange(1, 5)
+        self.paddingPosition.setRange(0, 5)
         self.paddingPosition.setValue(2)
         self.paddingPosition.setFixedWidth(300)
         padpos_layout.addWidget(padpos_label)
         padpos_layout.addWidget(self.paddingPosition)
         padpos_layout.addStretch()
+        self.paddingPosition.valueChanged.connect(self.sideUpdateRename)
         mainLayout.addLayout(padpos_layout)
 
-        # Preview Field
         preview_layout = QtWidgets.QHBoxLayout()
         preview_label = QtWidgets.QLabel("Preview:")
         self.previewField = QtWidgets.QLineEdit()
         self.previewField.setReadOnly(True)
         self.previewField.setFixedWidth(300)
         self.previewField.setStyleSheet("background-color: #555555;")
-        self.previewField.setText(preview_text)
+        self.previewField.setText(self.previewText)
         preview_layout.addWidget(preview_label)
         preview_layout.addWidget(self.previewField)
         mainLayout.addLayout(preview_layout)
 
-        # Buttons
         mainLayout.addStretch()
         exeLayout = QtWidgets.QHBoxLayout()
         self.renameButton = QtWidgets.QPushButton("Rename")
@@ -200,7 +221,6 @@ class RenameToolUI(QtWidgets.QMainWindow):
         miniLayout.addLayout(delButtonsLayout)
         miniLayout.addLayout(del02ButtonsLayout)
         mainLayout.addLayout(miniLayout)
-        
         
         
         autoexeLayout = QtWidgets.QHBoxLayout()
@@ -293,8 +313,51 @@ class RenameToolUI(QtWidgets.QMainWindow):
         return layout
 
     def updatePreview(self):
-        preview = "_".join(templateName)
-        self.previewField.setText(preview)
+        self.previewField.setText(self.previewText)
+
+    def sideUpdateRename(self):
+        self.useSide = self.sideCheck.isChecked()
+        self.useNumbering = self.numberCheck.isChecked()
+        
+        parts = self.templateName.split("|")
+        inserts = []
+        
+        if self.useSide:
+            sideValue = self.sideRadioGrp.checkedButton().text()
+            sideIndex = max(0, min(len(parts), self.sideSlider.value()))
+            inserts.append((sideIndex, sideValue))
+            parts.insert(sideIndex, sideValue)
+        else:
+            for s in ["L", "R", "C"]:
+                if s in parts:
+                    parts.remove(s)
+        
+        if self.useNumbering:
+            startNum = self.startNumField.value()
+            print(self.numPadField.value() )
+            num = str(startNum).zfill(self.numPadField.value())
+            numberIndex = max(0, min(len(parts), self.paddingPosition.value()))
+            if self.useSide and self.useNumbering and sideIndex >=0 and numberIndex == 0:
+                    numberIndex = 1
+
+            
+            inserts.append((numberIndex, num))
+            parts.insert(numberIndex, num)
+        
+
+        
+        self.updatePreviewVariable(parts)
+
+
+
+
+    def updatePreviewVariable(self, parts):
+
+        self.previewText = "_".join(parts)
+        self.previewField.setText(self.previewText)
+
+
+        
 
 
     def rename(self):
