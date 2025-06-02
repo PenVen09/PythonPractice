@@ -37,7 +37,6 @@ class RenameToolUI(QtWidgets.QMainWindow):
     def buildUI(self):
         mainLayout = QtWidgets.QVBoxLayout()
 
-        # Selection Group
         label = QtWidgets.QLabel("------------------------ Selection Options ----------------------------")
         label.setAlignment(QtCore.Qt.AlignCenter)
         mainLayout.addWidget(label)
@@ -63,7 +62,7 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.sideCheck.setChecked(True)
         mainLayout.addWidget(self.sideCheck)
 
-        # Side Group
+
         side_group = QtWidgets.QGroupBox("Side:")
         side_layout = QtWidgets.QHBoxLayout()
         self.sideRadioGrp = QtWidgets.QButtonGroup(self)
@@ -77,13 +76,10 @@ class RenameToolUI(QtWidgets.QMainWindow):
 
         side_group.setLayout(side_layout)
         
-        
-        
         self.sideCheck.toggled.connect(lambda state: self._toggleRadio(self.sideRadioGrp, state))
         self.sideCheck.toggled.connect(self.sideUpdateRename)
         mainLayout.addWidget(side_group)
 
-        # Side Slider
         pos_layout = QtWidgets.QHBoxLayout()
         pos_layout.addStretch()
         pos_label = QtWidgets.QLabel("Position:       ")
@@ -97,19 +93,19 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.sideSlider.valueChanged.connect(self.sideUpdateRename)
         mainLayout.addLayout(pos_layout)
 
-        # Text Fields
         mainLayout.addWidget(self._separator())
         label = QtWidgets.QLabel("------------------------ Main ----------------------------")
         label.setAlignment(QtCore.Qt.AlignCenter)
         mainLayout.addWidget(label)
-        self.prefixesRow = self._textField_and_dropdown("Prefixes:", 120, "prefixesNameField", ["RIG", "SM", "GEO", "CAM"], "enter prefixes")
-        mainLayout.addLayout(self.prefixesRow)
-        
-        tmpLayout = QtWidgets.QHBoxLayout()
-        tmpLayout.addLayout(self._labeled_textfield("Base Name:", 120, "baseNameField", "base or search for"))
+        prefixLayout, self.prefixField, self.prefixDropdown = self._textField_and_dropdown("Prefixes:", 120, "prefixesNameField", ["RIG", "SM", "GEO", "CAM"], "enter prefixes")
+        self.prefixField.textChanged.connect(self.mainNaming)
 
-        
-        
+        mainLayout.addLayout(prefixLayout)
+                
+        tmpLayout = QtWidgets.QHBoxLayout()
+        baseLayout, self.baseField  = self._labeled_textfield("Base Name:", 120, "baseNameField", "base or search for")
+        self.baseField.textChanged.connect(self.mainNaming)
+        tmpLayout.addLayout(baseLayout)
         self.replaceCheck = QtWidgets.QCheckBox("R")
         
         self.replaceCheck.setChecked(False)
@@ -119,7 +115,6 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.replaceTextField.setEnabled(False)
         self.replaceTextField.setStyleSheet("color: grey; background-color: #555555;")
 
-       
         self.replaceCheck.toggled.connect(lambda state: self._toggle_Field(self.replaceTextField, state))
         
         tmpLayout.addWidget(self.replaceCheck)
@@ -128,9 +123,14 @@ class RenameToolUI(QtWidgets.QMainWindow):
         mainLayout.addLayout(tmpLayout)
         
         
-        mainLayout.addLayout(self._textField_and_dropdown("Suffixes:", 120, "suffixesNameField", ["Auto Suffixes","JNT", "OFFSET", "CTRL", "GRP"], "enter suffixes"))
+        suffixLayout, self.suffixField, self.suffixDropdown = self._textField_and_dropdown("Suffixes:", 120, "suffixesNameField", ["Auto Suffixes","JNT", "OFFSET", "CTRL", "GRP"], "enter suffixes")
+        self.suffixField.textChanged.connect(self.mainNaming)
+        mainLayout.addLayout(suffixLayout)
         
-
+        
+        
+        
+        
         mainLayout.addWidget(self._separator())
         label = QtWidgets.QLabel("------------------------ Numbering ----------------------------")
         label.setAlignment(QtCore.Qt.AlignCenter)
@@ -144,16 +144,14 @@ class RenameToolUI(QtWidgets.QMainWindow):
         startNumLabel = QtWidgets.QLabel("Start Number:")
         self.startNumField = QtWidgets.QSpinBox()
         self.startNumField.setMinimum(0)
-        self.startNumField.setValue(0)
+        self.startNumField.setValue(1)
         startNumLayout.addWidget(startNumLabel)
         startNumLayout.addWidget(self.startNumField)
-        
-        
 
         numPadLabel = QtWidgets.QLabel("Number Padding:")
         self.numPadField = QtWidgets.QSpinBox()
-        self.numPadField.setMinimum(0)
-        self.numPadField.setValue(0)
+        self.numPadField.setMinimum(1)
+        self.numPadField.setValue(2)
         startNumLayout .addWidget(numPadLabel)
         startNumLayout.addWidget(self.numPadField)
         
@@ -161,7 +159,6 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.startNumField.valueChanged.connect(self.sideUpdateRename)
         self.numPadField.valueChanged.connect(self.sideUpdateRename)
         mainLayout.addLayout(startNumLayout)
-
 
         padpos_layout = QtWidgets.QHBoxLayout()
         padpos_layout.addStretch()
@@ -190,24 +187,26 @@ class RenameToolUI(QtWidgets.QMainWindow):
         mainLayout.addStretch()
         exeLayout = QtWidgets.QHBoxLayout()
         self.renameButton = QtWidgets.QPushButton("Rename")
+        self.renameButton.clicked.connect(self.rename)
         self.resetButton = QtWidgets.QPushButton("Reset")
         self.resetButton.setStyleSheet("background-color: red; color: white;")
         exeLayout.addWidget(self.renameButton)
         exeLayout.addWidget(self.resetButton)
         mainLayout.addLayout(exeLayout)
         
-        
         miniLayout =  QtWidgets.QHBoxLayout()
         delButtonsLayout = QtWidgets.QHBoxLayout()
-        label1 = QtWidgets.QLabel("Remove end")
-        endNumField = QtWidgets.QSpinBox()
-        endNumField.setMinimum(0)
-        endNumField.setValue(0)
+        label1 = QtWidgets.QLabel("Remove from")
+        self.endNumField = QtWidgets.QSpinBox()
+        self.endNumField.setMinimum(-100) 
+        self.endNumField.setValue(-1)
+        
 
         btnDel = QtWidgets.QPushButton()
         btnDel.setIcon(QtGui.QIcon(":delete.png"))
+        btnDel.clicked.connect(self.removeEnd)
         delButtonsLayout.addWidget(label1)
-        delButtonsLayout.addWidget(endNumField)
+        delButtonsLayout.addWidget(self.endNumField)
         delButtonsLayout.addWidget(btnDel)
 
         del02ButtonsLayout = QtWidgets.QHBoxLayout()
@@ -216,7 +215,6 @@ class RenameToolUI(QtWidgets.QMainWindow):
         btnDel02.setIcon(QtGui.QIcon(":delete.png"))
         del02ButtonsLayout.addWidget(label2)
         del02ButtonsLayout.addWidget(btnDel02)
-        
 
         miniLayout.addLayout(delButtonsLayout)
         miniLayout.addLayout(del02ButtonsLayout)
@@ -226,14 +224,12 @@ class RenameToolUI(QtWidgets.QMainWindow):
         autoexeLayout = QtWidgets.QHBoxLayout()
         self.autoSuffixesButton = QtWidgets.QPushButton("Auto Suffixes")
         
-        
         autoexeLayout.addWidget(self.autoSuffixesButton)
         mainLayout.addLayout(autoexeLayout)
 
         central_widget = QtWidgets.QWidget()
         central_widget.setLayout(mainLayout)
         self.setCentralWidget(central_widget)
-        
         
 
     def _labeled_textfield(self, label_text, width, object_name, placeholderText):
@@ -247,7 +243,7 @@ class RenameToolUI(QtWidgets.QMainWindow):
         layout.addWidget(label)
         layout.addWidget(field)
         
-        return layout
+        return layout, field
 
 
     def _separator(self):
@@ -289,12 +285,9 @@ class RenameToolUI(QtWidgets.QMainWindow):
 
     def _textField_and_dropdown(self, label_text, field_width, field_name, dropdown_items, placeholderText):
         layout = QtWidgets.QHBoxLayout()
-    
-
         label = QtWidgets.QLabel(label_text)
         label.setFixedWidth(80)
-        
-
+    
         field = QtWidgets.QLineEdit()
         field.setObjectName(field_name)
         field.setFixedWidth(field_width)
@@ -310,10 +303,21 @@ class RenameToolUI(QtWidgets.QMainWindow):
         layout.addWidget(field)
         layout.addWidget(dropdown)
         layout.addStretch()
-        return layout
+        return layout, field, dropdown
 
     def updatePreview(self):
         self.previewField.setText(self.previewText)
+        
+    def mainNaming(self):
+        prefix = self.prefixField.text() or ""
+        base = self.baseField.text() or "baseName"
+        suffix = self.suffixField.text() or ""
+        
+        parts = [prefix, base, suffix]
+        parts = [p for p in parts if p]
+        
+        self.templateName = "|".join(parts)
+        self.sideUpdateRename()
 
     def sideUpdateRename(self):
         self.useSide = self.sideCheck.isChecked()
@@ -334,7 +338,6 @@ class RenameToolUI(QtWidgets.QMainWindow):
         
         if self.useNumbering:
             startNum = self.startNumField.value()
-            print(self.numPadField.value() )
             num = str(startNum).zfill(self.numPadField.value())
             numberIndex = max(0, min(len(parts), self.paddingPosition.value()))
             if self.useSide and self.useNumbering and sideIndex >=0 and numberIndex == 0:
@@ -344,11 +347,7 @@ class RenameToolUI(QtWidgets.QMainWindow):
             inserts.append((numberIndex, num))
             parts.insert(numberIndex, num)
         
-
-        
         self.updatePreviewVariable(parts)
-
-
 
 
     def updatePreviewVariable(self, parts):
@@ -357,27 +356,47 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.previewField.setText(self.previewText)
 
 
-        
-
-
     def rename(self):
-        for i, obj in enumerate(selections):
-            num = str(startNum + i).zfill(padding)
-            baseName = f"{prefixes}_{baseName}_{suffixes}"
-            parts = baseName.split("_")
-            padPosClamped = max(1, min(len(parts), padPos))
-            sidePosClamped = max(0, min(len(parts), sidePos))
-            inserts = [(padPosClamped, num),
-                      (sidePosClamped, sideList[side])
-                      ]
-            inserts_sorted = sorted(inserts, reverse=True)
-            for insert_index, insert_value in inserts_sorted:
-                parts.insert(insert_index, insert_value)
-                
-            objNewName = "_".join(parts)
+        selections = cmds.ls(selection=True)
         
-            cmds.rename(obj, objNewName)
-            
+        for i, obj in enumerate(selections):
+            parts = self.templateName.split("|")
+            parts = [p for p in parts if p]
+            inserts = []
+    
+            if self.numberCheck.isChecked():
+                num = str(self.startNumField.value() + i).zfill(self.numPadField.value())
+                padPos = self.paddingPosition.value()
+                padPosClamped = max(0, min(len(parts), padPos))
+                inserts.append((padPosClamped, num))
+    
+            if self.sideCheck.isChecked():
+                side = self.sideRadioGrp.checkedButton().text()
+                sidePos = self.sideSlider.value()
+                sidePosClamped = max(0, min(len(parts), sidePos))
+                inserts.append((sidePosClamped, side))
+    
+            for index, value in sorted(inserts, key=lambda x: x[0], reverse=True):
+                parts.insert(index, value)
+    
+            new_name = "_".join(parts)
+            cmds.rename(obj, new_name)
+
+    def removeEnd(self):
+        selections = cmds.ls(selection=True)
+        value = self.endNumField.value()
+        for selected in selections:
+            if value > 0:
+                newName = selected[value:]  
+            elif value < 0:
+                newName = selected[:value]  
+            else:
+                newName = selected  
+            cmds.rename(selected, newName)
+        return
+
+    def autoSuffixes(self):
+        return
 
 def getWindow():
     main_window_ptr = omui.MQtUtil.mainWindow()
