@@ -1,4 +1,5 @@
 from maya import cmds
+import maya.mel as mel
 import json
 from PySide2 import QtWidgets, QtCore, QtGui
 from shiboken2 import wrapInstance
@@ -8,11 +9,11 @@ import maya.OpenMayaUI as omui
 class MainUI(QtWidgets.QMainWindow):
     def __init__(self,parent=None):
         super(MainUI, self).__init__(parent)
-        self.setWindowTitle("CopySkinAuto")
+        self.setWindowTitle("Ven Copy Skin Tool")
         self.setGeometry(100, 100, 400, 300)
         self.data = []
         
-        self.create_UI()#run stuff
+        self.create_UI()
             
             
     def create_UI(self):
@@ -93,12 +94,21 @@ class MainUI(QtWidgets.QMainWindow):
         layout.addLayout(exeRadioLayout)
 
         exeLayout = QtWidgets.QHBoxLayout()
-        self.exeButton = QtWidgets.QPushButton("Execute")
-        self.exeButton.clicked.connect(self.execute)
-        exeLayout.addWidget(self.exeButton)
+        self.exeBtn = QtWidgets.QPushButton("Execute")
+        self.exeBtn.clicked.connect(self.execute)
+        exeLayout.addWidget(self.exeBtn)
         layout.addLayout(exeLayout)
        
-       
+        utilLayout = QtWidgets.QHBoxLayout()
+        self.copySkinBtn = QtWidgets.QPushButton("Copy Skin")
+        self.copySkinBtn.clicked.connect(self.copySkin)
+        utilLayout.addWidget(self.copySkinBtn)
+        
+        self.mirrorSkinBtn = QtWidgets.QPushButton("Mirror Skin")
+        self.mirrorSkinBtn.clicked.connect(self.mirrorSkin)
+        utilLayout.addWidget(self.mirrorSkinBtn)
+        
+        layout.addLayout(utilLayout)
         guide_tab.setLayout(layout)
         self.setCentralWidget(guide_tab) 
         
@@ -165,6 +175,37 @@ class MainUI(QtWidgets.QMainWindow):
             self.dstListWidgets.takeItem(current_row)
         pass
 
+    def copySkin(self):
+        selected = cmds.ls(selection=True)
+        cmds.undoInfo(openChunk=True)
+        try:
+            proxyMesh = selected[0]
+            dstMesh = selected[1]
+            proxySC = self.get_skin_cluster(proxyMesh)
+            originalSC = self.get_skin_cluster(dstMesh)
+            cmds.setAttr(proxySC + ".envelope", 0)
+            cmds.setAttr(originalSC + ".envelope", 0)
+            cmds.copySkinWeights(noMirror=True, surfaceAssociation="closestPoint", influenceAssociation="closestJoint")
+            cmds.setAttr(proxySC + ".envelope", 1)
+            cmds.setAttr(originalSC + ".envelope", 1)
+        
+        except:
+            cmds.warning("No skincluster")
+        cmds.undoInfo(closeChunk=True)
+
+    def mirrorSkin(self):
+        selected = cmds.ls(selection=True)[0]
+        cmds.undoInfo(openChunk=True)
+        try:
+            proxySC = self.get_skin_cluster(selected)
+            cmds.setAttr(proxySC + ".envelope", 0)
+            mel.eval('performMirrorSkinWeights 0;')
+            cmds.setAttr(proxySC + ".envelope", 1)
+
+        except:
+            cmds.warning("No skincluster")
+        cmds.undoInfo(closeChunk=True)
+
     def execute(self):
         checked = self.exeRadioGrp.checkedId()
         if checked == -2:
@@ -187,6 +228,8 @@ class MainUI(QtWidgets.QMainWindow):
             cmds.warning(" Nothing selected")
             return
             
+            
+        cmds.undoInfo(openChunk=True)
         for index in selection:
             current_row = self.proxyListWidgets.row(index)
             mesh = self.data[current_row]
@@ -215,6 +258,7 @@ class MainUI(QtWidgets.QMainWindow):
                 break
 
             pass
+        cmds.undoInfo(closeChunk=True)
 
     def get_skin_cluster(self, mesh_name):
         history = cmds.listHistory(mesh_name)
@@ -325,7 +369,6 @@ class MainUI(QtWidgets.QMainWindow):
             json.dump(self.data, f, indent=4)
         
         
-
     def refreshList(self, objects):
         self.proxyListWidgets.clear()
         self.dstListWidgets.clear()
@@ -348,18 +391,22 @@ class MainUI(QtWidgets.QMainWindow):
 
     def load_saved_items(self):
         file_path = self.get_save_path()
-        folder = os.path.dirname(file_path)
-        full_path = os.path.join(folder, "transfer_skin_list.txt")
-
-        if not os.path.exists(full_path):
-            return []
-
-        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-            with open(file_path, "r") as f:
-                self.data = json.load(f)
-                self.refreshList(self.data)
+        if not file_path:
+            QtWidgets.QMessageBox.warning(self, "Warning", "Please save file first.")
         else:
-            self.data = [] 
+            folder = os.path.dirname(file_path)
+    
+            full_path = os.path.join(folder, "transfer_skin_list.txt")
+    
+            if not os.path.exists(full_path):
+                return []
+    
+            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+                with open(file_path, "r") as f:
+                    self.data = json.load(f)
+                    self.refreshList(self.data)
+            else:
+                self.data = [] 
 
     def show_context_menu(self, position):
         sender_widget = self.sender()
