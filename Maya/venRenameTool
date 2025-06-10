@@ -74,6 +74,10 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.sideSlider.setRange(0, 5)
         self.sideSlider.setValue(2)
         self.sideSlider.setFixedWidth(300)
+        self.sideSlider.setEnabled(False)
+        self.sideCheck.toggled.connect(lambda state: self.sideSlider.setEnabled(state))
+        
+        
         pos_layout.addWidget(pos_label)
         pos_layout.addWidget(self.sideSlider)
         pos_layout.addStretch()
@@ -108,6 +112,7 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.replaceBtn = QtWidgets.QPushButton("R")
         self.replaceBtn.setStyleSheet("color: grey; background-color: #555555;")
         self.replaceBtn.setEnabled(False)
+        self.replaceBtn.clicked.connect(self.searchReplace)
         
 
         self.replaceCheck.toggled.connect(lambda state: self._toggle_Field(self.replaceTextField, state))
@@ -144,6 +149,10 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.startNumField = QtWidgets.QSpinBox()
         self.startNumField.setMinimum(0)
         self.startNumField.setValue(1)
+        self.startNumField.setEnabled(False)
+        self.numberCheck.toggled.connect(lambda state: self.startNumField.setEnabled(state))
+        
+        
         startNumLayout.addWidget(startNumLabel)
         startNumLayout.addWidget(self.startNumField)
 
@@ -151,6 +160,8 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.numPadField = QtWidgets.QSpinBox()
         self.numPadField.setMinimum(1)
         self.numPadField.setValue(2)
+        self.numPadField.setEnabled(False)
+        self.numberCheck.toggled.connect(lambda state: self.numPadField.setEnabled(state))
         startNumLayout .addWidget(numPadLabel)
         startNumLayout.addWidget(self.numPadField)
         
@@ -165,6 +176,10 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.paddingPosition = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.paddingPosition.setRange(0, 5)
         self.paddingPosition.setValue(2)
+        self.paddingPosition.setEnabled(False)
+        self.numberCheck.toggled.connect(lambda state: self.paddingPosition.setEnabled(state))
+        
+        
         self.paddingPosition.setFixedWidth(300)
         padpos_layout.addWidget(padpos_label)
         padpos_layout.addWidget(self.paddingPosition)
@@ -279,7 +294,7 @@ class RenameToolUI(QtWidgets.QMainWindow):
         for rb in radGrp.buttons():
             rb.setEnabled(enabled)
             if enabled:
-                rb.setStyleSheet("")  # normal color
+                rb.setStyleSheet("")
             else:
                 rb.setStyleSheet("color: #555555;")  # dark grey color
         
@@ -322,6 +337,16 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.previewField.setText(self.previewText)
         
         
+    def searchReplace(self):
+        searchName = self.baseField.text()
+        replaceName = self.replaceTextField.text()
+        selections = cmds.ls(selection=True)
+        for selected in selections:
+            print(selected)
+            newName = selected.replace(searchName, replaceName)
+            print(newName)
+            #cmds.rename(selected, newName)
+        
     def reset(self):
         self.sideCheck.setChecked(False)
         
@@ -330,6 +355,9 @@ class RenameToolUI(QtWidgets.QMainWindow):
         self.numPadField.setValue(2)
         self.endNumField.setValue(-1)
         self.endNumField.setValue(-1)
+        
+        self.sideSlider.setValue(2)
+        self.paddingPosition.setValue(2)
         
         self.prefixField.clear()
         self.baseField.clear()
@@ -401,8 +429,10 @@ class RenameToolUI(QtWidgets.QMainWindow):
 
     def rename(self):
         selections = cmds.ls(selection=True)
+        fullName = cmds.ls(selection=True, long=True)
+        length = len(selections) -1
         cmds.undoInfo(openChunk=True)
-        for i, obj in enumerate(selections):
+        for i, obj in enumerate(reversed(selections)):
             parts = self.templateName.split("|")
             parts = [p for p in parts if p]
             inserts = []
@@ -415,7 +445,7 @@ class RenameToolUI(QtWidgets.QMainWindow):
                 inserts.append((sidePosClamped, side))
     
             if self.numberCheck.isChecked():
-                num = str(self.startNumField.value() + i).zfill(self.numPadField.value())
+                num = str(self.startNumField.value() + length).zfill(self.numPadField.value())
                 padPos = self.paddingPosition.value()
                 padPosClamped = max(0, min(len(parts), padPos))
                 
@@ -425,9 +455,20 @@ class RenameToolUI(QtWidgets.QMainWindow):
                 inserts.append((padPosClamped, num))
             for index, value in sorted(inserts, key=lambda x: x[0], reverse=True):
                 parts.insert(index, value)
-    
+            
             new_name = "_".join(parts)
-            cmds.rename(obj, new_name)
+            
+            if self.numberCheck.isChecked(): #safe rename
+                cmds.rename(obj, new_name)
+                length-=1
+            elif length != 0:
+                 cmds.rename(obj, new_name + str(length))
+                 length-=1
+            else:
+                cmds.rename(obj, new_name)
+
+                 
+                 
             
         cmds.undoInfo(closeChunk=True)
 
