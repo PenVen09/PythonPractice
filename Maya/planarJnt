@@ -9,73 +9,207 @@ class venJointTooling(QtWidgets.QMainWindow):
         self.setFixedSize(400, 600)
         self.createUI()
         self.show()
-        self.selJnt = []
+        self.selected_joint = []
+        
         
     def createUI(self):
         central_widget = QtWidgets.QWidget()
         self.setCentralWidget(central_widget)
-        mainLayout = QtWidgets.QVBoxLayout(central_widget)
+        main_layout = QtWidgets.QVBoxLayout(central_widget)
 
 
         tab_widget = QtWidgets.QTabWidget()
-        mainLayout.addWidget(tab_widget)
+        main_layout.addWidget(tab_widget)
 
 
-        self.jntTab = QtWidgets.QWidget()
-        tab_widget.addTab(self.jntTab, "Joints")
+        self.jnt_tab = QtWidgets.QWidget()
+        tab_widget.addTab(self.jnt_tab, "Joints")
 
-        basicLayout = QtWidgets.QVBoxLayout(self.jntTab)
-        basicLayout.setAlignment(QtCore.Qt.AlignTop)
+        basic_layout = QtWidgets.QVBoxLayout(self.jnt_tab)
+        basic_layout.setAlignment(QtCore.Qt.AlignTop)
 
         label = QtWidgets.QLabel("Basic:")
-        self.spwnJnt = QtWidgets.QPushButton("Spawn Joints")
-        basicLayout.addWidget(label)
-        basicLayout.addWidget(self.spwnJnt)
+        self.spawn_jnt = QtWidgets.QPushButton("Spawn Joints")
+        basic_layout.addWidget(label)
+        basic_layout.addWidget(self.spawn_jnt)
 
-        basicLayout.addWidget(self._separator())
+        basic_layout.addWidget(self._separator())
 
         label = QtWidgets.QLabel("Make Joint Planar:")
-        basicLayout.addWidget(label)
+        basic_layout.addWidget(label)
 
-        btnLayout = QtWidgets.QHBoxLayout()
-        self.btn1 = QtWidgets.QPushButton("Step 1")
-        self.btn2 = QtWidgets.QPushButton("Step 2")
-        btnLayout.addWidget(self.btn1)
-        btnLayout.addWidget(self.btn2)
-        basicLayout.addLayout(btnLayout)
+        button_layout = QtWidgets.QHBoxLayout()
+        self.planar_button_01 = QtWidgets.QPushButton("Step 1")
+        self.planar_button_02 = QtWidgets.QPushButton("Step 2")
+        button_layout.addWidget(self.planar_button_01)
+        button_layout.addWidget(self.planar_button_02)
+        basic_layout.addLayout(button_layout)
 
-        basicLayout.addWidget(self._separator())
+        basic_layout.addWidget(self._separator())
 
         label = QtWidgets.QLabel("Make Twist System:")
-        basicLayout.addWidget(label)
+        basic_layout.addWidget(label)
 
-        twstBtnLayout = QtWidgets.QHBoxLayout()
-        self.twstBtn = QtWidgets.QPushButton("Twist Selected")
-        twstBtnLayout.addWidget(self.twstBtn)
-        basicLayout.addLayout(twstBtnLayout)
+        twist_button_layout = QtWidgets.QHBoxLayout()
+        self.twist_button = QtWidgets.QPushButton("Twist Selected")
+        twist_button_layout.addWidget(self.twist_button)
+        basic_layout.addLayout(twist_button_layout)
 
-        self.btn1.clicked.connect(self.button1_action)
-        self.btn2.clicked.connect(self.button2_action)
+        self.planar_button_01.clicked.connect(self.planar_on_pressed_01)
+        self.planar_button_02.clicked.connect(self.planar_on_pressed_02)
 
 
-        self.controllerTab = QtWidgets.QWidget()
-        tab_widget.addTab(self.controllerTab, "Controller")
-        ctrlLayout = QtWidgets.QVBoxLayout(self.controllerTab)
-        rowCtrlLayout = QtWidgets.QHBoxLayout()
+        ##########################################
+        controller_scroll_area = QtWidgets.QScrollArea()
+        controller_scroll_area.setWidgetResizable(True)
+        controller_scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+        self.controller_scroll_content = QtWidgets.QWidget()
+        self.controller_scroll_content.setMinimumHeight(800)
+        
+        
+        controller_main_layout = QtWidgets.QVBoxLayout(self.controller_scroll_content)
+        controller_main_layout.setAlignment(QtCore.Qt.AlignTop)
+
+        controller_scroll_area.setWidget(self.controller_scroll_content)
+        main_layout.addWidget(controller_scroll_area)
+
+
+
+
+
+
+
+        '''
+        section_widget, toggle_button, section_layout = self._collapsible_button("Controller Color")
+        section_layout.addWidget(QtWidgets.QLabel("Color Picker 1"))
+        section_layout.addWidget(QtWidgets.QPushButton("Choose Color"))
+
+        controller_main_layout.addWidget(section_widget)
+        '''
+        ########################
+        controller_widget, controller_collapsible_button, controller_container = self._collapsible_button("Create Controller")
+        row_controller_layout = QtWidgets.QHBoxLayout()
         
         self.ctrlListWidget = QtWidgets.QListWidget()
-        self.ctrlListWidget.setFixedHeight(200)
-        self.ctrlListWidget.setFixedWidth(200)
-        self.offsetBtn = QtWidgets.QPushButton("Offset")
-        rowCtrlLayout.addWidget(self.ctrlListWidget,alignment=QtCore.Qt.AlignTop)
-        rowCtrlLayout.addWidget(self.offsetBtn, alignment=QtCore.Qt.AlignTop)
+        self.ctrlListWidget.setFixedSize(200, 200)
+        row_controller_layout.addWidget(self.ctrlListWidget, alignment=QtCore.Qt.AlignTop)
         
-        ctrlLayout.addLayout(rowCtrlLayout)
+        buttonsLayout = QtWidgets.QVBoxLayout()
+        
+        self.offset_button = QtWidgets.QPushButton("Offset")
+        self.parent_button = QtWidgets.QPushButton("Parent")
+        self.child_button = QtWidgets.QPushButton("Child")
+        self.world_button = QtWidgets.QPushButton("World")
+        
+        buttonsLayout.addWidget(self.offset_button)
+        buttonsLayout.addWidget(self.parent_button)
+        buttonsLayout.addWidget(self.child_button)
+        buttonsLayout.addWidget(self.world_button)
+        
+        row_controller_layout.addLayout(buttonsLayout, alignment=QtCore.Qt.AlignTop)
+        controller_container.addLayout(row_controller_layout)
+        
+        controller_main_layout.addWidget(controller_widget)
+        
+        
+        
+        ########################
+        color_widget, color_collapsible_button, color_layout = self._collapsible_button("Controller Color")
+        swatch_grid = QtWidgets.QGridLayout()
+        swatch_grid.setSpacing(0)
+        swatch_grid.setContentsMargins(0, 0, 0, 0)
+        color_widget.setStyleSheet("background-color: #2A2A2A;")
+        
+        color_index = 0
+        for row in range(4):
+            for column in range(8):
+                btn = QtWidgets.QPushButton()
+                button_colour = colorList().get_color_by_index(color_index)
+                btn.setStyleSheet(f"background-color: rgb{button_colour};")
+                swatch_grid.addWidget(btn, row, column)
+                color_index += 1
+                
+                
+        color_reset_btn = QtWidgets.QPushButton("Reset Color")
+        color_reset_btn.setStyleSheet("background-color: gray;")
+        color_layout.addLayout(swatch_grid)
+        color_layout.addWidget(color_reset_btn)
+        controller_main_layout.addWidget(color_widget)
+        
+        #######
+        lock_widget, lock_collapsible_button, lock_container = self._collapsible_button("Lock/Unlock Attributes")
 
         
-    def button1_action(self,*args):
-        self.selJnt = cmds.ls(selection=True, type="joint")
-        if len(self.selJnt) == 3:
+        controller_main_layout.addWidget(lock_widget)
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        tab_widget.addTab(controller_scroll_area, "Controller")
+        tab_widget.setCurrentIndex(1)
+        
+    
+    def _collapsible_button(self, label_text):
+        section_widget = QtWidgets.QWidget()
+        section_layout = QtWidgets.QVBoxLayout(section_widget)
+        section_layout.setContentsMargins(0, 0, 0, 0)
+    
+        toggle_button = QtWidgets.QToolButton(checkable=True, checked=False)
+        toggle_button.setText(label_text)
+        toggle_button.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        toggle_button.setArrowType(QtCore.Qt.DownArrow)
+        toggle_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+    
+        toggle_button.setStyleSheet("""
+            QToolButton {
+                background-color:  #666666;   
+                border: none;              
+                padding: 4px;              
+                border-radius: 4px;          
+                color: white;               
+            }
+        """)
+    
+        content_widget = QtWidgets.QWidget()
+        content_layout = QtWidgets.QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(5, 0, 5, 5)
+        content_widget.setVisible(True)
+    
+    
+        section_layout.addWidget(toggle_button)
+        section_layout.addWidget(content_widget)
+        toggle_button.clicked.connect(lambda: self._collapsible_on_pressed(toggle_button, content_widget))
+        
+        return section_widget, toggle_button, content_layout
+
+    def _collapsible_on_pressed(self, buttons, collapse_frame):
+        checked = buttons.isChecked()
+        buttons.setArrowType(QtCore.Qt.DownArrow if not checked else QtCore.Qt.RightArrow)
+        collapse_frame.setVisible(not checked)
+        return
+        
+        
+    def _separator(self):
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        line.setStyleSheet("margin-top: 5px; margin-bottom: 5px;")
+        return line
+
+
+
+        
+    def planar_on_pressed_01(self,*args):
+        self.selected_joint = cmds.ls(selection=True, type="joint")
+        if len(self.selected_joint) == 3:
             self.planarPlane = cmds.polyPlane(    
                         name="tmpPlanarPlane",
                         width=30,
@@ -89,19 +223,19 @@ class venJointTooling(QtWidgets.QMainWindow):
                         name = "tmpPlanarLoc"
                         )[0]
             
-            cmds.matchTransform(self.planarPlane, self.selJnt[0])
-            pos = cmds.xform(self.selJnt[0], query=True, translation=True, worldSpace=True)
+            cmds.matchTransform(self.planarPlane, self.selected_joint[0])
+            pos = cmds.xform(self.selected_joint[0], query=True, translation=True, worldSpace=True)
             cmds.xform(self.planarLoc, translation=pos, worldSpace=True)
             
             
             
-            tmpAim= cmds.aimConstraint(self.selJnt[2], self.planarPlane,aim = (1,0,0), wu = (0,0, 1), wut="object",wuo=self.planarLoc, mo=False)
-            cmds.delete(tmpAim)
+            tmp_aim= cmds.aimConstraint(self.selected_joint[2], self.planarPlane,aim = (1,0,0), wu = (0,0, 1), wut="object",wuo=self.planarLoc, mo=False)
+            cmds.delete(tmp_aim)
             cmds.parent(self.planarLoc, self.planarPlane)
             cmds.rotate(0,0,0, self.planarLoc)
             cmds.move( 0, 30, 0, self.planarLoc, relative=True, worldSpace=False,objectSpace=True)
             
-            for jnt in self.selJnt:
+            for jnt in self.selected_joint:
                 cmds.parent(jnt, self.planarPlane)
                 cmds.setAttr(f"{jnt}.translateY", 0)
                 cmds.setAttr(f"{jnt}.translateY", lock=True)
@@ -109,33 +243,64 @@ class venJointTooling(QtWidgets.QMainWindow):
         else:
             cmds.warning("Select only 3 joints")
     
-    def button2_action(self,*args):
-        for jnt in self.selJnt:
+    def planar_on_pressed_02(self,*args):
+        for jnt in self.selected_joint:
             cmds.setAttr(f"{jnt}.translateY", lock=False)
             cmds.setAttr(f"{jnt}.translateY", 0)
             cmds.parent(jnt, world=True)
     
-        tmpAim1= cmds.aimConstraint(self.selJnt[1], self.selJnt[0],aim = (1,0,0), upVector = (0,0, 1), wut="object",wuo=self.planarLoc, mo=False)
-        cmds.delete(tmpAim1)
-        tmpAim2= cmds.aimConstraint(self.selJnt[2], self.selJnt[1],aim = (1,0,0), upVector = (0,0, 1), wu = (0,0, 1), wut="objectrotation", wuo=self.selJnt[0], mo=False)
-        cmds.delete(tmpAim2)
+        tmp_aim1= cmds.aimConstraint(self.selected_joint[1], self.selected_joint[0],aim = (1,0,0), upVector = (0,0, 1), wut="object",wuo=self.planarLoc, mo=False)
+        cmds.delete(tmp_aim1)
+        tmp_aim2= cmds.aimConstraint(self.selected_joint[2], self.selected_joint[1],aim = (1,0,0), upVector = (0,0, 1), wu = (0,0, 1), wut="objectrotation", wuo=self.selected_joint[0], mo=False)
+        cmds.delete(tmp_aim2)
     
-        cmds.parent(self.selJnt[2], self.selJnt[1])
-        cmds.parent(self.selJnt[1], self.selJnt[0])
+        cmds.parent(self.selected_joint[2], self.selected_joint[1])
+        cmds.parent(self.selected_joint[1], self.selected_joint[0])
         
-        for jnt in self.selJnt: 
+        for jnt in self.selected_joint: 
             cmds.makeIdentity(jnt, apply=True, r=True)
         cmds.delete(self.planarPlane)
         cmds.delete(self.planarLoc)
         
-    def _separator(self):
-        line = QtWidgets.QFrame()
-        line.setFrameShape(QtWidgets.QFrame.HLine)
-        line.setFrameShadow(QtWidgets.QFrame.Sunken)
-        line.setStyleSheet("margin-top: 5px; margin-bottom: 5px;")
-        return line
 
 
+class colorList():
+    def get_color_by_index(self, index):
+        maya_colors = [
+            (0, 4, 95),        # 0
+            (0, 0, 0),         # 1
+            (63, 63, 63),      # 2
+            (127, 127, 127),   # 3
+            (155, 0, 40),      # 4
+            (0, 0, 255),       # 5
+            (0, 70, 24),       # 6
+            (37, 0, 67),       # 7
+            (199, 0, 199),     # 8
+            (137, 71, 51),     # 9
+            (62, 34, 31),      # 10
+            (153, 36, 0),      # 11
+            (255, 0, 0),       # 12
+            (0, 255, 0),       # 13
+            (0, 65, 153),      # 14
+            (255, 255, 255),   # 15
+            (255, 255, 0),     # 16
+            (99, 220, 255),    # 17
+            (67, 255, 162),    # 18
+            (255, 175, 175),   # 19
+            (227, 172, 121),   # 20
+            (255, 255, 98),    # 21
+            (0, 153, 83),      # 22
+            (160, 105, 48),    # 23
+            (158, 160, 48),    # 24
+            (104, 160, 48),    # 25
+            (48, 160, 93),     # 26
+            (48, 160, 160),    # 27
+            (48, 103, 160),    # 28
+            (111, 48, 160),    # 29
+            (160, 48, 111),    # 30
+            (77, 77, 77)       # 31 – placeholder/neutral gray
+        ]
+        return maya_colors[index]
 
 def getWindow():
     main_window_ptr = omui.MQtUtil.mainWindow()
@@ -148,7 +313,7 @@ def show_jointTooling():
         jointToolingUI.deleteLater()
     except:
         pass
-    
+        
     parent = getWindow()
     jointToolingUI = venJointTooling(parent)
     jointToolingUI.show()
