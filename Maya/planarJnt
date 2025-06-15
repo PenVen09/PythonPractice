@@ -95,19 +95,21 @@ class venJointTooling(QtWidgets.QMainWindow):
         self.ctrlListWidget.setFixedSize(200, 200)
         row_controller_layout.addWidget(self.ctrlListWidget, alignment=QtCore.Qt.AlignTop)
         
-        buttonsLayout = QtWidgets.QVBoxLayout()
+        
+        buttons_widget = QtWidgets.QWidget()
+        buttons_layout = QtWidgets.QVBoxLayout(buttons_widget)
         
         self.offset_button = QtWidgets.QPushButton("Offset")
         self.parent_button = QtWidgets.QPushButton("Parent")
         self.child_button = QtWidgets.QPushButton("Child")
         self.world_button = QtWidgets.QPushButton("World")
         
-        buttonsLayout.addWidget(self.offset_button)
-        buttonsLayout.addWidget(self.parent_button)
-        buttonsLayout.addWidget(self.child_button)
-        buttonsLayout.addWidget(self.world_button)
-        
-        row_controller_layout.addLayout(buttonsLayout, alignment=QtCore.Qt.AlignTop)
+        buttons_layout.addWidget(self.offset_button)
+        buttons_layout.addWidget(self.parent_button)
+        buttons_layout.addWidget(self.child_button)
+        buttons_layout.addWidget(self.world_button)
+
+        row_controller_layout.addWidget(buttons_widget, alignment=QtCore.Qt.AlignTop)
         controller_container.addLayout(row_controller_layout)
         
         controller_main_layout.addWidget(controller_widget)
@@ -116,6 +118,7 @@ class venJointTooling(QtWidgets.QMainWindow):
         
         ########################
         color_widget, color_collapsible_button, color_layout = self._collapsible_button("Controller Color")
+        
         swatch_grid = QtWidgets.QGridLayout()
         swatch_grid.setSpacing(0)
         swatch_grid.setContentsMargins(0, 0, 0, 0)
@@ -137,11 +140,63 @@ class venJointTooling(QtWidgets.QMainWindow):
         color_layout.addWidget(color_reset_btn)
         controller_main_layout.addWidget(color_widget)
         
-        #######
-        lock_widget, lock_collapsible_button, lock_container = self._collapsible_button("Lock/Unlock Attributes")
+        
+        #############
+        add_attribute_widget, attribute_collapsible_button, attribute_container = self._collapsible_button("Add Attributes")
 
         
+        controller_main_layout.addWidget(add_attribute_widget)
+        
+        
+        
+        
+        
+        
+        
+        
+        #######
+        lock_widget, lock_collapsible_button, lock_container = self._collapsible_button("Lock/Unlock Attributes")
+        lock_hide_layout = QtWidgets.QHBoxLayout()
+        lock_hide_label = QtWidgets.QLabel("Operations:")
+        lock_checkboxes = QtWidgets.QCheckBox("Lock")
+        hide_checkboxes = QtWidgets.QCheckBox("Hide")
+        execute_lock_button = QtWidgets.QPushButton("Execute")
+        
+        
+        lock_hide_layout.addWidget(lock_hide_label)
+        lock_hide_layout.addWidget(lock_checkboxes)
+        lock_hide_layout.addWidget(hide_checkboxes)
+        lock_hide_layout.addWidget(execute_lock_button)
+        lock_container.addLayout(lock_hide_layout)
+        lock_container.addWidget(self._separator())
+        
+        
+        for attribute in ["Translate", "Rotate", "Scale"]:
+            transform_layout = self._create_colored_checkboxes(attribute)
+            lock_container.addLayout(transform_layout)
+                        
+        
+        visibility_layout = QtWidgets.QHBoxLayout()
+        visibility_checkboxes = QtWidgets.QCheckBox("Visibility")
+        
+        lock_container.addLayout(visibility_layout)
+    
+        visibility_layout.addWidget(visibility_checkboxes)
+        lock_container.addWidget(self._separator())
+        
+        
+        lock_utilities_layout = QtWidgets.QHBoxLayout()
+        lock_button = QtWidgets.QPushButton("Lock")
+        unlock_button = QtWidgets.QPushButton("Unlock")
+        hide_button = QtWidgets.QPushButton("Hide")
+        
+        lock_utilities_layout.addWidget(lock_button)
+        lock_utilities_layout.addWidget(unlock_button)
+        lock_utilities_layout.addWidget(hide_button)
+        lock_container.addLayout(lock_utilities_layout)
+        
         controller_main_layout.addWidget(lock_widget)
+        ###########
         
         
         
@@ -150,13 +205,41 @@ class venJointTooling(QtWidgets.QMainWindow):
         
         
         
-        
-        
+        controller_collapsible_button.click()
+        color_collapsible_button.click()
+        attribute_collapsible_button.click()
         
         tab_widget.addTab(controller_scroll_area, "Controller")
         tab_widget.setCurrentIndex(1)
         
-    
+
+    def _create_colored_checkboxes(self, attribute):
+        transform_layout = QtWidgets.QHBoxLayout()
+        transform_layout.setContentsMargins(0, 0, 0, 0) 
+        lock_checkboxes = QtWidgets.QCheckBox(attribute)
+        transform_layout.addWidget(lock_checkboxes)
+        
+        for axis, color in zip(["X", "Y", "Z"], ["red", "green", "blue"]):
+            axis_checkbox = QtWidgets.QCheckBox(axis)
+        
+            icon_label = QtWidgets.QLabel()
+            icon_label.setFixedSize(5, 12)
+            icon_label.setStyleSheet(f"background-color: {color};")
+        
+            axis_layout = QtWidgets.QHBoxLayout()
+            axis_layout.setSpacing(2)
+            axis_layout.setContentsMargins(0, 0, 0, 0)
+            axis_layout.addWidget(icon_label)
+            axis_layout.addWidget(axis_checkbox)
+        
+            axis_widget = QtWidgets.QWidget()
+            axis_widget.setLayout(axis_layout)
+            transform_layout.addWidget(axis_widget)
+
+        
+        return transform_layout
+
+
     def _collapsible_button(self, label_text):
         section_widget = QtWidgets.QWidget()
         section_layout = QtWidgets.QVBoxLayout(section_widget)
@@ -187,7 +270,7 @@ class venJointTooling(QtWidgets.QMainWindow):
         section_layout.addWidget(toggle_button)
         section_layout.addWidget(content_widget)
         toggle_button.clicked.connect(lambda: self._collapsible_on_pressed(toggle_button, content_widget))
-        
+        #toggle_button.click()
         return section_widget, toggle_button, content_layout
 
     def _collapsible_on_pressed(self, buttons, collapse_frame):
