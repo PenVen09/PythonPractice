@@ -6,7 +6,7 @@ class venJointTooling(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super(venJointTooling, self).__init__(parent)
         self.setWindowTitle("Ven Joint Tooling")
-        self.setFixedSize(400, 600)
+        self.setFixedSize(400, 1000)
         self.createUI()
         self.show()
         self.selected_joint = []
@@ -65,8 +65,6 @@ class venJointTooling(QtWidgets.QMainWindow):
         controller_scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
 
         self.controller_scroll_content = QtWidgets.QWidget()
-        self.controller_scroll_content.setMinimumHeight(800)
-        
         
         controller_main_layout = QtWidgets.QVBoxLayout(self.controller_scroll_content)
         controller_main_layout.setAlignment(QtCore.Qt.AlignTop)
@@ -89,27 +87,47 @@ class venJointTooling(QtWidgets.QMainWindow):
         '''
         ########################
         controller_widget, controller_collapsible_button, controller_container = self._collapsible_button("Create Controller")
+        
+        
+        thickness_layout = QtWidgets.QHBoxLayout()
+        thickness_label = QtWidgets.QLabel("Thickness :")
+        
+        thickness_box = QtWidgets.QLineEdit()
+        thickness_box.setText("1.0")
+        thickness_box.setFixedWidth(30)
+        thickness_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        thickness_slider.setRange(0.0*10, 3.0*10)
+        thickness_slider.setValue(1.0)
+        thickness_layout.addWidget(thickness_label)
+        thickness_layout.addWidget(thickness_box)
+        thickness_layout.addWidget(thickness_slider)
+        
+        
         row_controller_layout = QtWidgets.QHBoxLayout()
         
         self.ctrlListWidget = QtWidgets.QListWidget()
         self.ctrlListWidget.setFixedSize(200, 200)
         row_controller_layout.addWidget(self.ctrlListWidget, alignment=QtCore.Qt.AlignTop)
         
-        
         buttons_widget = QtWidgets.QWidget()
         buttons_layout = QtWidgets.QVBoxLayout(buttons_widget)
         
+        add_offset = QtWidgets.QCheckBox("Add Offset group")
         self.offset_button = QtWidgets.QPushButton("Offset")
         self.parent_button = QtWidgets.QPushButton("Parent")
         self.child_button = QtWidgets.QPushButton("Child")
         self.world_button = QtWidgets.QPushButton("World")
         
+        buttons_layout.addWidget(add_offset)
         buttons_layout.addWidget(self.offset_button)
         buttons_layout.addWidget(self.parent_button)
         buttons_layout.addWidget(self.child_button)
         buttons_layout.addWidget(self.world_button)
+        
+        
 
         row_controller_layout.addWidget(buttons_widget, alignment=QtCore.Qt.AlignTop)
+        controller_container.addLayout(thickness_layout)
         controller_container.addLayout(row_controller_layout)
         
         controller_main_layout.addWidget(controller_widget)
@@ -131,14 +149,57 @@ class venJointTooling(QtWidgets.QMainWindow):
                 button_colour = colorList().get_color_by_index(color_index)
                 btn.setStyleSheet(f"background-color: rgb{button_colour};")
                 swatch_grid.addWidget(btn, row, column)
+                
+                btn.clicked.connect(lambda *args,idx=color_index: self.controller_color(idx))
+                
                 color_index += 1
                 
                 
         color_reset_btn = QtWidgets.QPushButton("Reset Color")
+        color_reset_btn.clicked.connect(self.reset_color)
         color_reset_btn.setStyleSheet("background-color: gray;")
         color_layout.addLayout(swatch_grid)
         color_layout.addWidget(color_reset_btn)
         controller_main_layout.addWidget(color_widget)
+        
+        ############
+        replace_shape_widget, replace_collapsible_button, replace_container = self._collapsible_button("Replace Shapes")
+        
+        to_replace_layout = QtWidgets.QHBoxLayout()
+        to_replace_box = QtWidgets.QLineEdit()
+        to_replace_box.setFixedWidth(200)
+        to_replace_button = QtWidgets.QPushButton("Register Shape")
+        to_replace_box.setReadOnly(True)
+        
+        
+        to_replace_layout.addWidget(to_replace_box)
+        to_replace_layout.addWidget(to_replace_button)
+        
+        shape_reference_layout = QtWidgets.QHBoxLayout()
+        shape_reference_box = QtWidgets.QLineEdit()
+        shape_reference_box.setReadOnly(True)
+        shape_reference_box.setFixedWidth(200)
+        shape_reference_button = QtWidgets.QPushButton("Reference Shape")
+        
+        shape_reference_layout.addWidget(shape_reference_box)
+        shape_reference_layout.addWidget(shape_reference_button)
+        
+        replace_layout = QtWidgets.QHBoxLayout()
+        mirror_checkbox = QtWidgets.QCheckBox("Mirror Shapes")
+        replace_button = QtWidgets.QPushButton("Replace Shapes")
+        replace_button.setFixedWidth(200)
+        replace_layout.addWidget(mirror_checkbox)
+        replace_layout.addWidget(replace_button)
+        
+        
+        replace_container.addLayout(to_replace_layout)
+        replace_container.addLayout(shape_reference_layout)
+        replace_container.addLayout(replace_layout)
+        
+        
+        
+        controller_main_layout.addWidget(replace_shape_widget)
+        
         
         
         #############
@@ -190,24 +251,55 @@ class venJointTooling(QtWidgets.QMainWindow):
         unlock_button = QtWidgets.QPushButton("Unlock")
         hide_button = QtWidgets.QPushButton("Hide")
         
+        shift_layout = QtWidgets.QHBoxLayout()
+        shift_up_attribute = QtWidgets.QPushButton("Shift Up")
+        shift_down_attribute = QtWidgets.QPushButton("Shift Down")
+        
+        shift_layout.addWidget(shift_up_attribute)
+        shift_layout.addWidget(shift_down_attribute)
+        
+        
         lock_utilities_layout.addWidget(lock_button)
         lock_utilities_layout.addWidget(unlock_button)
         lock_utilities_layout.addWidget(hide_button)
         lock_container.addLayout(lock_utilities_layout)
+        lock_container.addLayout(shift_layout)
         
         controller_main_layout.addWidget(lock_widget)
         ###########
         
+        connect_attribute_widget, connect_collapsible_button, connect_container = self._collapsible_button("Connect Attributes")
         
+        row_object_layout = QtWidgets.QHBoxLayout()
+        source_object =  QtWidgets.QLineEdit()
+        label_object = QtWidgets.QLabel(">")
+        target_object = QtWidgets.QLineEdit()
         
+        row_object_layout.addWidget(source_object)
+        row_object_layout.addWidget(label_object)
+        row_object_layout.addWidget(target_object)
+        connect_container.addLayout(row_object_layout)
         
+        row_connect_layout = QtWidgets.QHBoxLayout()
         
+        source_connect_list = QtWidgets.QListWidget()
+        source_connect_list .setFixedSize(170, 200)
+        target_connect_list = QtWidgets.QListWidget()
+        target_connect_list .setFixedSize(170, 200)
+        
+        row_connect_layout.addWidget(source_connect_list,alignment=QtCore.Qt.AlignTop)
+        row_connect_layout.addWidget(target_connect_list,alignment=QtCore.Qt.AlignTop)
+        connect_container.addLayout(row_connect_layout)
+        controller_main_layout.addWidget(connect_attribute_widget)
+        ####
         
         
         
         controller_collapsible_button.click()
-        color_collapsible_button.click()
+        #color_collapsible_button.click()
         attribute_collapsible_button.click()
+        replace_collapsible_button.click()
+        lock_collapsible_button.click()
         
         tab_widget.addTab(controller_scroll_area, "Controller")
         tab_widget.setCurrentIndex(1)
@@ -219,8 +311,11 @@ class venJointTooling(QtWidgets.QMainWindow):
         lock_checkboxes = QtWidgets.QCheckBox(attribute)
         transform_layout.addWidget(lock_checkboxes)
         
+        
+        axis_checkboxes = []
         for axis, color in zip(["X", "Y", "Z"], ["red", "green", "blue"]):
             axis_checkbox = QtWidgets.QCheckBox(axis)
+            axis_checkboxes.append(axis_checkbox)
         
             icon_label = QtWidgets.QLabel()
             icon_label.setFixedSize(5, 12)
@@ -235,6 +330,8 @@ class venJointTooling(QtWidgets.QMainWindow):
             axis_widget = QtWidgets.QWidget()
             axis_widget.setLayout(axis_layout)
             transform_layout.addWidget(axis_widget)
+            
+        lock_checkboxes.stateChanged.connect(lambda state, boxes=axis_checkboxes: self._toggle_axis_checkboxes(state, boxes))
 
         
         return transform_layout
@@ -286,10 +383,14 @@ class venJointTooling(QtWidgets.QMainWindow):
         line.setFrameShadow(QtWidgets.QFrame.Sunken)
         line.setStyleSheet("margin-top: 5px; margin-bottom: 5px;")
         return line
+    
+    
+    def _toggle_axis_checkboxes(self, state, boxes):
+        checked = state == QtCore.Qt.Checked
+        for checkbox in boxes:
+            checkbox.setChecked(checked)
+            checkbox.setEnabled(not checked)
 
-
-
-        
     def planar_on_pressed_01(self,*args):
         self.selected_joint = cmds.ls(selection=True, type="joint")
         if len(self.selected_joint) == 3:
@@ -345,17 +446,36 @@ class venJointTooling(QtWidgets.QMainWindow):
         cmds.delete(self.planarPlane)
         cmds.delete(self.planarLoc)
         
+        
+        
+    def controller_color(self, color_index):
+        selection = cmds.ls(selection=True, long=True)
+        shapes = cmds.listRelatives(selection, shapes=True, fullPath=True) or []
+        for shape in shapes:
+            cmds.setAttr(f"{shape}.overrideEnabled", 1)
+            cmds.setAttr(f"{shape}.overrideColor", color_index)
+    
+    def reset_color(self):
+        selection = cmds.ls(selection=True, long=True)
+        shapes = cmds.listRelatives(selection, shapes=True, fullPath=True) or []
+        for shape in shapes:
+            cmds.setAttr(f"{shape}.overrideEnabled", 0)
+            cmds.setAttr(f"{shape}.overrideColor", 0)
+            
+            
+
 
 
 class colorList():
     def get_color_by_index(self, index):
         maya_colors = [
-            (0, 4, 95),        # 0
+            (140, 140, 140),        # 0
             (0, 0, 0),         # 1
             (63, 63, 63),      # 2
             (127, 127, 127),   # 3
             (155, 0, 40),      # 4
             (0, 0, 255),       # 5
+            (0, 4, 95),       # 6
             (0, 70, 24),       # 6
             (37, 0, 67),       # 7
             (199, 0, 199),     # 8
@@ -381,9 +501,12 @@ class colorList():
             (48, 103, 160),    # 28
             (111, 48, 160),    # 29
             (160, 48, 111),    # 30
-            (77, 77, 77)       # 31 – placeholder/neutral gray
         ]
         return maya_colors[index]
+        
+        
+        
+        
 
 def getWindow():
     main_window_ptr = omui.MQtUtil.mainWindow()
