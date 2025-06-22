@@ -5,12 +5,12 @@ import maya.OpenMayaUI as omui
 class venJointTooling(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super(venJointTooling, self).__init__(parent)
+        self.controller_data = controller_data()
         self.setWindowTitle("Ven Joint Tooling")
         self.setFixedSize(400, 1000)
-        self.createUI()
-        self.show()
         self.selected_joint = []
-        
+        self.createUI()
+
         
     def createUI(self):
         central_widget = QtWidgets.QWidget()
@@ -67,46 +67,44 @@ class venJointTooling(QtWidgets.QMainWindow):
         self.controller_scroll_content = QtWidgets.QWidget()
         
         controller_main_layout = QtWidgets.QVBoxLayout(self.controller_scroll_content)
-        controller_main_layout.setAlignment(QtCore.Qt.AlignTop)
+        #controller_main_layout.setAlignment(QtCore.Qt.AlignTop)
 
         controller_scroll_area.setWidget(self.controller_scroll_content)
         main_layout.addWidget(controller_scroll_area)
 
-
-
-
-
-
-
-        '''
-        section_widget, toggle_button, section_layout = self._collapsible_button("Controller Color")
-        section_layout.addWidget(QtWidgets.QLabel("Color Picker 1"))
-        section_layout.addWidget(QtWidgets.QPushButton("Choose Color"))
-
-        controller_main_layout.addWidget(section_widget)
-        '''
         ########################
         controller_widget, controller_collapsible_button, controller_container = self._collapsible_button("Create Controller")
         
         
         thickness_layout = QtWidgets.QHBoxLayout()
         thickness_label = QtWidgets.QLabel("Thickness :")
-        
-        thickness_box = QtWidgets.QLineEdit()
-        thickness_box.setText("1.0")
-        thickness_box.setFixedWidth(30)
+
+        self.thickness_box = QtWidgets.QLineEdit()
+        self.thickness_box .setText("1.0")
+        self.thickness_box .setFixedWidth(40)
         thickness_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        thickness_slider.setRange(0.0*10, 3.0*10)
-        thickness_slider.setValue(1.0)
+        thickness_slider.valueChanged.connect(lambda value: self._on_slider_change(value, self.thickness_box ))
+        thickness_slider.setRange(0.0*100, 0.5*100)
+        thickness_slider.setValue(10.0)
+        thickness_button = QtWidgets.QPushButton("Apply")
+        
         thickness_layout.addWidget(thickness_label)
-        thickness_layout.addWidget(thickness_box)
+        thickness_layout.addWidget(self.thickness_box )
         thickness_layout.addWidget(thickness_slider)
+        thickness_layout.addWidget(thickness_button)
         
         
         row_controller_layout = QtWidgets.QHBoxLayout()
         
         self.ctrlListWidget = QtWidgets.QListWidget()
-        self.ctrlListWidget.setFixedSize(200, 200)
+        self.ctrlListWidget.setFixedSize(200, 170)
+        
+        
+        lib = controller_data()
+        list = lib.get_controller_list()
+        for ctrl in list:
+            self.ctrlListWidget.addItem(ctrl)
+        
         row_controller_layout.addWidget(self.ctrlListWidget, alignment=QtCore.Qt.AlignTop)
         
         buttons_widget = QtWidgets.QWidget()
@@ -117,6 +115,8 @@ class venJointTooling(QtWidgets.QMainWindow):
         self.parent_button = QtWidgets.QPushButton("Parent")
         self.child_button = QtWidgets.QPushButton("Child")
         self.world_button = QtWidgets.QPushButton("World")
+        
+        self.offset_button.clicked.connect(self.test)
         
         buttons_layout.addWidget(add_offset)
         buttons_layout.addWidget(self.offset_button)
@@ -208,13 +208,6 @@ class venJointTooling(QtWidgets.QMainWindow):
         
         controller_main_layout.addWidget(add_attribute_widget)
         
-        
-        
-        
-        
-        
-        
-        
         #######
         lock_widget, lock_collapsible_button, lock_container = self._collapsible_button("Lock/Unlock Attributes")
         lock_hide_layout = QtWidgets.QHBoxLayout()
@@ -295,11 +288,11 @@ class venJointTooling(QtWidgets.QMainWindow):
         
         
         
-        controller_collapsible_button.click()
+        #controller_collapsible_button.click()
         #color_collapsible_button.click()
-        attribute_collapsible_button.click()
-        replace_collapsible_button.click()
-        lock_collapsible_button.click()
+        #attribute_collapsible_button.click()
+        #replace_collapsible_button.click()
+        #lock_collapsible_button.click()
         
         tab_widget.addTab(controller_scroll_area, "Controller")
         tab_widget.setCurrentIndex(1)
@@ -336,6 +329,10 @@ class venJointTooling(QtWidgets.QMainWindow):
         
         return transform_layout
 
+
+    def _on_slider_change(self, value, field):
+        new_value = value*0.1
+        field.setText(f"{new_value:.2f}")
 
     def _collapsible_button(self, label_text):
         section_widget = QtWidgets.QWidget()
@@ -446,7 +443,10 @@ class venJointTooling(QtWidgets.QMainWindow):
         cmds.delete(self.planarPlane)
         cmds.delete(self.planarLoc)
         
-        
+    def test(self):
+        crv = cmds.curve(d=1, p=self.controller_data.cvTuples['Circle'])
+        return
+            
         
     def controller_color(self, color_index):
         selection = cmds.ls(selection=True, long=True)
@@ -504,9 +504,38 @@ class colorList():
         ]
         return maya_colors[index]
         
+
+class controller_data():
+    def __init__(self):
+        self.cvTuples = {
+        'Group':[],
+        '---------------':[],
+        'Gear':[],
+        'Circle': [(0.0, 0.0, 1.0),(0.707, 0.0, 0.707),(1.0, 0.0, 0.0),(0.707, 0.0, -0.707),(0.0, 0.0, -1.0),(-0.707, 0.0, -0.707),(-1.0, 0.0, 0.0),(-0.707, 0.0, 0.707),(0.0, 0.0, 1.0)],
+        'Square':[],
+        'Box': [],
+        'Triangle':[],
+        'Pyramid':[],
+        'Diamond':[],
+        'Circle Pin':[],
+        'Square Pin':[],
+        'Sphere Pin':[],
+        'Locator':[],
+        'Two Arrows':[],
+        'Four Arrows':[],
+        'Pivot Points':[],
         
+        }
         
-        
+    def get_controller_list(self):
+        control_list = []
+        for name in self.cvTuples.keys():
+            control_list.append(name)
+        return control_list
+    
+
+
+
 
 def getWindow():
     main_window_ptr = omui.MQtUtil.mainWindow()
