@@ -62,34 +62,30 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         save_controller_checkbox.toggled.connect(save_controller_button.setEnabled)
         save_controller_button.clicked.connect(lambda: (self.data.save(controller_name_field.text()), self.populate()))
 
+        folder_button =QtWidgets.QPushButton("")
+        folder_button.setIcon(QtGui.QIcon(":files.png"))
+        controller_name_layout.addWidget(folder_button)
         controller_name_layout.addWidget(controller_name_field)
         controller_name_layout.addWidget(save_controller_checkbox)
         controller_name_layout.addWidget(save_controller_button)
+
         controller_container.addLayout(controller_name_layout)
-
-
 
 
         row_controller_layout = QtWidgets.QHBoxLayout()
 
         thickness_layout = QtWidgets.QHBoxLayout()
-        thickness_label = QtWidgets.QLabel("Thickness :")
+        thickness_label = QtWidgets.QLabel("Thickness")
 
-        self.thickness_box = QtWidgets.QLineEdit()
-        self.thickness_box.setText("1.0")
-        self.thickness_box.setFixedWidth(40)
-        thickness_increase_button = QtWidgets.QPushButton("◀")
-        thickness_increase_button.setFixedWidth(50)
-
-        thickness_decrease_button = QtWidgets.QPushButton("▶")
-        thickness_decrease_button.setFixedWidth(50)
-
+        self.thickness_box = QtWidgets.QDoubleSpinBox()
+        self.thickness_box.setMinimum(0.0)
+        self.thickness_box.setValue(1.0)
+        self.thickness_box.setFixedWidth(60)
+        self.thickness_box.setDecimals(2)
 
 
         thickness_layout.addWidget(thickness_label)
-        thickness_layout.addWidget(self.thickness_box )
-        thickness_layout.addWidget(thickness_increase_button)
-        thickness_layout.addWidget(thickness_decrease_button)
+        thickness_layout.addWidget(self.thickness_box)
 
 
         self.ctrlListWidget = QtWidgets.QListWidget()
@@ -101,7 +97,12 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         row_controller_layout.addWidget(self.ctrlListWidget, alignment=QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
 
 
-        buttons_layout = QtWidgets.QHBoxLayout()
+        full_buttons_layout = QtWidgets.QHBoxLayout()
+        styled_buttons_layout = QtWidgets.QHBoxLayout()
+
+
+        styled_container = QtWidgets.QWidget()
+        styled_container.setStyleSheet("""background-color: #3c3c3c;""")
 
         self.offset_checkboxes = QtWidgets.QCheckBox("Add Offset group")
         self.create_button = QtWidgets.QPushButton("Create")
@@ -109,28 +110,31 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         self.create_button.clicked.connect(lambda : self.import_controller(True))
         self.replace_button.clicked.connect(lambda : self.import_controller(False))
 
-        buttons_layout.addWidget(self.offset_checkboxes)
-        buttons_layout.addWidget(self.create_button)
-        buttons_layout.addWidget(self.replace_button)
+        self.create_button.setStyleSheet(''' QPushButton {background-color: #555 ;color: white;}''')
+
+        styled_buttons_layout.addWidget(self.offset_checkboxes)
+        styled_buttons_layout.addWidget(self.create_button)
+
+
+
+        styled_container.setLayout(styled_buttons_layout)
+        full_buttons_layout.addWidget(styled_container)
+        full_buttons_layout.addWidget(self.replace_button)
+
 
         size_layout = QtWidgets.QHBoxLayout()
         size_label = QtWidgets.QLabel("Size")
 
-        self.size_box = QtWidgets.QLineEdit()
-        self.size_box .setText("1.0")
-        self.size_box .setFixedWidth(40)
-        size_decrease_button = QtWidgets.QPushButton("◀")
-        size_decrease_button.setFixedWidth(50)
-
-        size_increase_button = QtWidgets.QPushButton("▶")
-        size_increase_button.setFixedWidth(50)
+        self.size_box = QtWidgets.QDoubleSpinBox()
+        self.size_box.setMinimum(0.0)
+        self.size_box.setValue(1.0)
+        self.size_box.setFixedWidth(60)
+        self.size_box.setDecimals(2)
 
         size_layout.addWidget(size_label)
-        size_layout.addWidget(self.size_box )
-        size_layout.addWidget(size_decrease_button)
-        size_layout.addWidget(size_increase_button)
+        size_layout.addWidget(self.size_box)
         controller_container.addLayout(row_controller_layout)
-        controller_container.addLayout(buttons_layout, alignment=QtCore.Qt.AlignTop)
+        controller_container.addLayout(full_buttons_layout, alignment=QtCore.Qt.AlignTop)
         controller_container.addLayout(thickness_layout)
 
 
@@ -338,6 +342,9 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         row_connect_layout.addWidget(target_connect_list,alignment=QtCore.Qt.AlignTop)
         connect_container.addLayout(row_connect_layout)
         self.attribute_main_layout.addWidget(connect_attribute_widget)
+
+
+
     def _create_colored_checkboxes(self, attribute):
         transform_layout = QtWidgets.QHBoxLayout()
         transform_layout.setContentsMargins(0, 0, 0, 0)
@@ -463,8 +470,18 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
                 cmds.matchTransform(original_ctrl, selected)
             return
 
-    def replace_controller(self):
-        return
+
+    def shape_thickness(self, increase=True):
+        value = float(self.thickness_box.text())
+
+        selection = cmds.ls(selection=True)
+        if selection:
+            ctrl = cmds.listRelatives(selection, s=True)
+            for selected in ctrl:
+                cmds.setAttr(f"{selected}.overrideEnabled", 1)
+                cmds.setAttr(f"{selected}.lineWidth", float(value))
+
+
 
     def controller_color(self, color_index):
         selection = cmds.ls(selection=True, long=True)
@@ -585,30 +602,32 @@ def createDirectory(directory=DIRECTORY):
 
 class control_library(dict):
     def save(self, name, directory=DIRECTORY, screenshot=True, **info):
-        createDirectory(directory)
-        path = os.path.join(directory, f"{name}.ma")
-        info_file = os.path.join(directory, f"{name}.json")
-
-
-        info['name'] = name
-        info['path'] = path
-
-        cmds.file(rename=path)
-        selected = cmds.ls(selection=True)
-        if len(selected) == 1:
-            cmds.file(force=True, type='mayaAscii',exportSelected=True)
-        else:
-            cmds.warning("Select ONE Nurbs Curve")
-            return
-
         if screenshot:
-            info['screenshot'] = self.save_screenshot(name, directory=directory)
+            result = self.preview(name, directory=directory)
+            if result:
+                createDirectory(directory)
+                path = os.path.join(directory, f"{name}.ma")
+                info_file = os.path.join(directory, f"{name}.json")
 
 
-        with open(info_file,'w') as f:
-            json.dump(info, f, indent=4)
+                info['name'] = name
+                info['path'] = path
 
-        self[name]=path
+                cmds.file(rename=path)
+                selected = cmds.ls(selection=True)
+                if len(selected) == 1:
+                    cmds.file(force=True, type='mayaAscii',exportSelected=True)
+                else:
+                    cmds.warning("Select ONE Nurbs Curve")
+                    return
+                info['screenshot'] = self.preview(name, directory=directory)
+                with open(info_file,'w') as f:
+                    json.dump(info, f, indent=4)
+
+                self[name]=path
+            else:
+                return
+
 
     def find(self, directory=DIRECTORY):
         if not os.path.exists(directory):
@@ -651,15 +670,11 @@ class control_library(dict):
         cmds.file(path, removeReference=True)
 
         return duplicated
-
-    def save_screenshot(self, name, directory):
-        path = os.path.join(directory, f"{name}.jpg")
-
+    def preview(self, name, directory):
         camera_name, camera_shape = cmds.camera(orthographic=True)
         camera_name = cmds.rename(camera_name, "isoCam")
-        camera_shape = cmds.listRelatives(camera_name, shapes=True)[0]
+        camera_shape = cmds.listRelatives(camera_name, s=True)[0]
 
-        # Position camera for isometric view
         cmds.setAttr(f"{camera_name}.translateX", 30)
         cmds.setAttr(f"{camera_name}.translateY", 30)
         cmds.setAttr(f"{camera_name}.translateZ", 30)
@@ -669,10 +684,63 @@ class control_library(dict):
 
         cmds.lookThru(camera_name)
 
+        cmds.setAttr(f"{camera_shape}.cameraScale", 0.2)
+        #################
 
-        cmds.select(f"{name}")
-        #cmds.viewFit()
-        cmds.setAttr(f"{camera_name}Shape.cameraScale", 0.200)
+        dialog = QtWidgets.QDialog()
+        dialog.setWindowTitle("Screenshot Preview")
+        dialog.resize(400, 300)
+        main_layout = QtWidgets.QVBoxLayout(dialog)
+
+        translate_layout = QtWidgets.QHBoxLayout()
+        tx_spin = QtWidgets.QDoubleSpinBox()
+        ty_spin = QtWidgets.QDoubleSpinBox()
+        tz_spin = QtWidgets.QDoubleSpinBox()
+        translate_layout.addWidget(tx_spin)
+        translate_layout.addWidget(ty_spin)
+        translate_layout.addWidget(tz_spin)
+
+        zoom_layout = QtWidgets.QHBoxLayout()
+        zoom_label = QtWidgets.QLabel("Zoom Camera")
+        zoom_line = QtWidgets.QLineEdit()
+        zoom_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        zoom_slider.valueChanged.connect(lambda val: self.update_zoom(val, zoom_line, camera_name))
+
+        zoom_slider.setRange(1,10)
+        zoom_slider.setValue(2)
+
+        zoom_layout.addWidget(zoom_label)
+        zoom_layout.addWidget(zoom_line)
+        zoom_layout.addWidget(zoom_slider)
+        done_layout = QtWidgets.QHBoxLayout()
+        done_button = QtWidgets.QPushButton("Done")
+        done_layout.addWidget(done_button)
+        done_button.clicked.connect(dialog.accept)
+
+
+
+        main_layout.addLayout(translate_layout)
+        main_layout.addLayout(zoom_layout)
+        main_layout.addLayout(done_layout)
+        result = dialog.exec_()
+
+
+        if result == QtWidgets.QDialog.Accepted:
+            path = self.save_screenshot(name,directory, camera_name)
+            return path
+        else:
+            cmds.delete(camera_name)
+            return
+
+    def update_zoom(self, val, zoom_line, camera_name):
+        zoom = val / 10.0
+        zoom_line.setText(str(zoom))
+        cmds.setAttr(f"{camera_name}Shape.cameraScale", 1.01-zoom)
+
+
+    def save_screenshot(self, name, directory, camera_name):
+        path = os.path.join(directory, f"{name}.jpg")
+
         cmds.select(clear=True)
         cmds.setAttr('defaultRenderGlobals.imageFormat',8)
         cmds.cameraView(camera=camera_name)
@@ -726,7 +794,7 @@ def getWindow():
     main_window_ptr = omui.MQtUtil.mainWindow()
     return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
 
-
+#controller_UI = None
 def show_control_tool():
     global controller_UI
 
