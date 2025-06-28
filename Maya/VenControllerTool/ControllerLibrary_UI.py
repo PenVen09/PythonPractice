@@ -63,7 +63,7 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         save_controller_button.clicked.connect(lambda: (self.data.save(controller_name_field.text()), self.populate()))
 
         folder_button =QtWidgets.QPushButton("")
-        folder_button.setIcon(QtGui.QIcon(":files.png"))
+        folder_button.setIcon(QtGui.QIcon(":fileOpen.png"))
         controller_name_layout.addWidget(folder_button)
         controller_name_layout.addWidget(controller_name_field)
         controller_name_layout.addWidget(save_controller_checkbox)
@@ -448,8 +448,37 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         if create == True:
             isOffset = self.offset_checkboxes.isChecked()
             if isOffset:
-                group_name = original_ctrl.replace("_ctrl","_offset")
+                suffix = "_offset"
+                group_name = original_ctrl.replace("_ctrl",suffix)
                 cmds.group(original_ctrl, name = group_name)
+                to_duplicate = group_name
+
+            else:
+                suffix = "_ctrl"
+                to_duplicate = original_ctrl
+
+
+            if selection:
+                for i, selected in enumerate(selection):
+                    duplicated = cmds.duplicate(to_duplicate, name = selected + suffix)[0]
+                    cmds.matchTransform(duplicated, selected)
+
+                    if isOffset:
+                        children = cmds.listRelatives(duplicated, children=True, fullPath=True)
+                        child_uuid = cmds.ls(children[0], uuid=True)[0]
+                        real_child = cmds.ls(child_uuid, long=True)[0]
+                        renamed_child = cmds.rename(real_child, selected + "_ctrl")
+
+                    if i == 0 :
+                        last_parent = renamed_child if isOffset else duplicated
+                    else:
+                        cmds.parent( duplicated,last_parent)
+                        print(f"Parenting {duplicated} under {last_parent}")
+                        last_parent = renamed_child if isOffset else duplicated
+                        print(last_parent)
+                cmds.delete(to_duplicate)
+
+
         elif not create and selection:
             selected = selection[0]
             cmds.matchTransform(original_ctrl, selection)
@@ -603,28 +632,30 @@ def createDirectory(directory=DIRECTORY):
 class control_library(dict):
     def save(self, name, directory=DIRECTORY, screenshot=True, **info):
         if screenshot:
+            selected = cmds.ls(selection=True)
             result = self.preview(name, directory=directory)
             if result:
                 createDirectory(directory)
                 path = os.path.join(directory, f"{name}.ma")
                 info_file = os.path.join(directory, f"{name}.json")
 
-
                 info['name'] = name
                 info['path'] = path
 
                 cmds.file(rename=path)
-                selected = cmds.ls(selection=True)
                 if len(selected) == 1:
+                    a = cmds.select(selected)
+                    print(a)
                     cmds.file(force=True, type='mayaAscii',exportSelected=True)
+                    info['screenshot'] = result
+                    with open(info_file,'w') as f:
+                        json.dump(info, f, indent=4)
+
+                    self[name]=path
                 else:
                     cmds.warning("Select ONE Nurbs Curve")
                     return
-                info['screenshot'] = self.preview(name, directory=directory)
-                with open(info_file,'w') as f:
-                    json.dump(info, f, indent=4)
 
-                self[name]=path
             else:
                 return
 
@@ -673,7 +704,6 @@ class control_library(dict):
     def preview(self, name, directory):
         camera_name, camera_shape = cmds.camera(orthographic=True)
         camera_name = cmds.rename(camera_name, "isoCam")
-        camera_shape = cmds.listRelatives(camera_name, s=True)[0]
 
         cmds.setAttr(f"{camera_name}.translateX", 30)
         cmds.setAttr(f"{camera_name}.translateY", 30)
@@ -684,7 +714,18 @@ class control_library(dict):
 
         cmds.lookThru(camera_name)
 
-        cmds.setAttr(f"{camera_shape}.cameraScale", 0.2)
+        cmds.setAttr("defaultResolution.width", 200)
+        cmds.setAttr("defaultResolution.height", 200)
+        cmds.setAttr(f"{camera_name}.displayResolution", 1)
+        cmds.setAttr(f"{camera_name}.displayGateMask", 1)
+
+
+        panel = cmds.getPanel(withFocus=True)
+        if cmds.getPanel(typeOf=panel) == "modelPanel":
+            cmds.modelEditor(panel, edit=True, camera=camera_name)
+            cmds.viewFit()
+
+
         #################
 
         dialog = QtWidgets.QDialog()
@@ -693,9 +734,21 @@ class control_library(dict):
         main_layout = QtWidgets.QVBoxLayout(dialog)
 
         translate_layout = QtWidgets.QHBoxLayout()
+        tx_label = QtWidgets.QLabel('Translate X:')
+        ty_label = QtWidgets.QLabel('Translate Y:')
+        tz_label = QtWidgets.QLabel('Translate Z:')
         tx_spin = QtWidgets.QDoubleSpinBox()
         ty_spin = QtWidgets.QDoubleSpinBox()
         tz_spin = QtWidgets.QDoubleSpinBox()
+        tx_spin.setValue(30)
+        ty_spin.setValue(30)
+        tz_spin.setValue(30)
+        tx_spin.valueChanged.connect(lambda val: cmds.setAttr(f"{camera_name}.translateX", val))
+        ty_spin.valueChanged.connect(lambda val: cmds.setAttr(f"{camera_name}.translateY", val) )
+        tz_spin.valueChanged.connect(lambda val: cmds.setAttr(f"{camera_name}.translateZ", val) )
+        translate_layout.addWidget(tx_label)
+        translate_layout.addWidget(ty_label)
+        translate_layout.addWidget(tz_label)
         translate_layout.addWidget(tx_spin)
         translate_layout.addWidget(ty_spin)
         translate_layout.addWidget(tz_spin)
@@ -706,8 +759,8 @@ class control_library(dict):
         zoom_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         zoom_slider.valueChanged.connect(lambda val: self.update_zoom(val, zoom_line, camera_name))
 
-        zoom_slider.setRange(1,10)
-        zoom_slider.setValue(2)
+        zoom_slider.setRange(10,30)
+        zoom_slider.setValue(20)
 
         zoom_layout.addWidget(zoom_label)
         zoom_layout.addWidget(zoom_line)
@@ -726,17 +779,17 @@ class control_library(dict):
 
 
         if result == QtWidgets.QDialog.Accepted:
+            cmds.setAttr(f"{camera_name}.displayResolution",0)
+            cmds.setAttr(f"{camera_name}.displayGateMask", 0)
             path = self.save_screenshot(name,directory, camera_name)
             return path
         else:
             cmds.delete(camera_name)
-            return
 
     def update_zoom(self, val, zoom_line, camera_name):
         zoom = val / 10.0
         zoom_line.setText(str(zoom))
-        cmds.setAttr(f"{camera_name}Shape.cameraScale", 1.01-zoom)
-
+        cmds.setAttr(f"{camera_name}Shape.cameraScale", 3.2-zoom)
 
     def save_screenshot(self, name, directory, camera_name):
         path = os.path.join(directory, f"{name}.jpg")
