@@ -47,9 +47,9 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         controller_name_field.setPlaceholderText("Search or Name")
 
         style = QtWidgets.QApplication.style()
-        search_icon = QtGui.QIcon(":zoom.png")   # Closest to a magnifying glass
+        search_icon = QtGui.QIcon(":zoom.png")   
 
-        # Create the action and add it
+
         search_action = QtWidgets.QAction(search_icon, "", controller_name_field)
         search_action.triggered.connect(lambda: print("Search clicked!"))
         controller_name_field.addAction(search_action, QtWidgets.QLineEdit.TrailingPosition)
@@ -82,7 +82,7 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         self.thickness_box.setValue(1.0)
         self.thickness_box.setFixedWidth(60)
         self.thickness_box.setDecimals(2)
-
+        self.thickness_box.valueChanged.connect(self.shape_thickness)
 
         thickness_layout.addWidget(thickness_label)
         thickness_layout.addWidget(self.thickness_box)
@@ -123,16 +123,16 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
 
 
         size_layout = QtWidgets.QHBoxLayout()
+
         size_label = QtWidgets.QLabel("Size")
+        self.decrease_size_button = QtWidgets.QPushButton("◀")
+        self.increase_size_button = QtWidgets.QPushButton("▶")
+        self.increase_size_button.clicked.connect(lambda : self.shape_size(0.1))
+        self.decrease_size_button.clicked.connect(lambda :self.shape_size(-0.1))
 
-        self.size_box = QtWidgets.QDoubleSpinBox()
-        self.size_box.setMinimum(0.0)
-        self.size_box.setValue(1.0)
-        self.size_box.setFixedWidth(60)
-        self.size_box.setDecimals(2)
-
-        size_layout.addWidget(size_label)
-        size_layout.addWidget(self.size_box)
+        thickness_layout.addWidget(size_label)
+        thickness_layout.addWidget(self.decrease_size_button)
+        thickness_layout.addWidget(self.increase_size_button)
         controller_container.addLayout(row_controller_layout)
         controller_container.addLayout(full_buttons_layout, alignment=QtCore.Qt.AlignTop)
         controller_container.addLayout(thickness_layout)
@@ -442,73 +442,116 @@ class ControllerLibrary_UI(QtWidgets.QMainWindow):
         current_item = self.ctrlListWidget.currentItem()
         if not current_item:
             return
-        name = current_item.text()
-        original_ctrl = self.data.load(name)
+        selected_item = self.ctrlListWidget.selectedItems()
 
         if create == True:
-            isOffset = self.offset_checkboxes.isChecked()
-            if isOffset:
-                suffix = "_offset"
-                group_name = original_ctrl.replace("_ctrl",suffix)
-                cmds.group(original_ctrl, name = group_name)
-                to_duplicate = group_name
+            if selected_item:
+                name = current_item.text()
+                original_ctrl = self.data.load(name)
+                isOffset = self.offset_checkboxes.isChecked()
+                if isOffset:
+                    suffix = "_offset"
+                    group_name = original_ctrl.replace("_ctrl", suffix)
+                    cmds.group(original_ctrl, name=group_name)
+                    to_duplicate = group_name
+                else:
+                    suffix = "_ctrl"
+                    to_duplicate = original_ctrl
 
+                if selection:
+                    ctrl_map = {}
+                    offset_map = {}
+                    for selected in selection:
+                        dup_name = selected + suffix
+                        duplicated = cmds.duplicate(to_duplicate, name=dup_name)[0]
+                        cmds.matchTransform(duplicated, selected)
+
+                        if isOffset:
+                            children = cmds.listRelatives(duplicated, children=True, type="transform", fullPath=True)
+                            if children:
+                                uuid = cmds.ls(children[0], uuid=True)[0]
+                                real_child = cmds.ls(uuid, long=True)[0]
+                                renamed_child = cmds.rename(real_child, selected + "_ctrl")
+                                offset_map[selected] = duplicated
+                                ctrl_map[selected] = renamed_child
+                        else:
+                            ctrl_map[selected] = duplicated
+
+                    for selected in selection:
+                        new_ctrl = ctrl_map[selected]
+                        new_offset = offset_map[selected] if isOffset else None
+
+                        original_parent = cmds.listRelatives(selected, parent=True, type="transform")
+                        if original_parent:
+                            parent_name = original_parent[0]
+                            if parent_name in ctrl_map:
+                                new_parent = ctrl_map[parent_name]
+                                if isOffset:
+                                    cmds.parent(new_offset, new_parent)
+                                else:
+                                    cmds.parent(new_ctrl, new_parent)
+
+                    cmds.delete(to_duplicate)
             else:
-                suffix = "_ctrl"
-                to_duplicate = original_ctrl
-
-
-            if selection:
-                for i, selected in enumerate(selection):
-                    duplicated = cmds.duplicate(to_duplicate, name = selected + suffix)[0]
-                    cmds.matchTransform(duplicated, selected)
-
-                    if isOffset:
-                        children = cmds.listRelatives(duplicated, children=True, fullPath=True)
-                        child_uuid = cmds.ls(children[0], uuid=True)[0]
-                        real_child = cmds.ls(child_uuid, long=True)[0]
-                        renamed_child = cmds.rename(real_child, selected + "_ctrl")
-
-                    if i == 0 :
-                        last_parent = renamed_child if isOffset else duplicated
-                    else:
-                        cmds.parent( duplicated,last_parent)
-                        print(f"Parenting {duplicated} under {last_parent}")
-                        last_parent = renamed_child if isOffset else duplicated
-                        print(last_parent)
-                cmds.delete(to_duplicate)
-
+                return
 
         elif not create and selection:
-            selected = selection[0]
-            cmds.matchTransform(original_ctrl, selection)
-            cmds.makeIdentity(selection, apply=True, t=1, r=1, s=1)
+            if selected_item:
+                name = current_item.text()
+                original_ctrl = self.data.load(name)
+                for selected in selection:
+                    if cmds.listRelatives(selected, shapes=True, fullPath=True) != None:
+                        dup = cmds.duplicate(original_ctrl, name = original_ctrl+"TMP")
+                        original_shape = cmds.listRelatives(dup, s=True)
+                        selection_shape = cmds.listRelatives(selected, s=True)
+                        cmds.delete(selection_shape)
+                        for shape in original_shape:
+                            cmds.parent(shape, selected ,add=True, s=True)
+                            new_name = f"{selected}Shape" if len(selection_shape)>1 else selection_shape
+                            cmds.rename(shape, new_name)
+                        cmds.delete(dup)
 
-            original_shape = cmds.listRelatives(original_ctrl, s=True)
-            selection_shape = cmds.listRelatives(selected, s=True)[0]
-
-            for shape in original_shape:
-                shape = cmds.rename(original_shape, selection_shape)
-                cmds.parent(shape, selected ,add=True, s=True)
-
-            cmds.delete(selected)
-
-
-
-            for selected in selection:
-                cmds.matchTransform(original_ctrl, selected)
-            return
+                cmds.delete(original_ctrl)
 
 
-    def shape_thickness(self, increase=True):
-        value = float(self.thickness_box.text())
+            else:
+                return
+                '''
+                selection = cmds.ls(selected =True)[0]
+                if len(selection)>1:
+                    new_shape = cmds.listRelatives(selection[-1], s=True)
+                    for selected in selection[:-1]:
+                        original_shape = cmds.listRelatives(selected, s=True)
+                        cmds.delete(original_shape)
+                        cmds.parent(new_shape, selected, add=True, s=True)
+                        cmds.rename(original_shape, new_shape)
+                        
+                
 
+
+
+                else:
+                    return
+                '''
+
+
+    def shape_thickness(self):
+        value = float(self.thickness_box.value())
         selection = cmds.ls(selection=True)
         if selection:
             ctrl = cmds.listRelatives(selection, s=True)
             for selected in ctrl:
                 cmds.setAttr(f"{selected}.overrideEnabled", 1)
                 cmds.setAttr(f"{selected}.lineWidth", float(value))
+
+    def shape_size(self, delta):
+        selection = cmds.ls(selection=True)
+        print(selection)
+        if selection:
+            for selected in selection:
+                value = 1.0 + delta
+                cmds.scale(value, value, value, selected + ".cv[*]", relative=True)
+
 
 
 
@@ -847,16 +890,15 @@ def getWindow():
     main_window_ptr = omui.MQtUtil.mainWindow()
     return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
 
-#controller_UI = None
+
 def show_control_tool():
     global controller_UI
 
-    if controller_UI is not None:
-        try:
-            controller_UI.close()
-            controller_UI.deleteLater()
-        except:
-            pass
+    try:
+        controller_UI.close()
+        controller_UI.deleteLater()
+    except:
+        pass
 
     parent = getWindow()
     controller_UI = ControllerLibrary_UI(parent)
