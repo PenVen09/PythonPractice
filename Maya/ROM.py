@@ -8,7 +8,13 @@ class ROM_UI(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super(ROM_UI, self).__init__(parent)
         self.setFixedSize(500, 650)
+        self.saved_data = {
+        'spine': [-45.0, 45.0],
+        'clavicle': [-45.0, 45.0],
+        'arm':[-45.0, 45.0]}
+        self.slot_data = []
         self.create_UI()
+
         
     def create_UI(self):
         central_widget = QtWidgets.QWidget()
@@ -129,7 +135,28 @@ class ROM_UI(QtWidgets.QMainWindow):
 
         tab1_layout.addStretch()
         tab_widget.addTab(tab1, "ROM")
-        #tab_widget.addTab(tab2, "Template")
+
+        tab2 = QtWidgets.QWidget()
+        template_main_layout = QtWidgets.QVBoxLayout(tab2, alignment=QtCore.Qt.AlignTop)
+        self.slot_layout = QtWidgets.QVBoxLayout()
+        self.add_button = QtWidgets.QPushButton("Add Slot")
+        self.add_button.clicked.connect(self._add_slot)
+        self.submit_button = QtWidgets.QPushButton("Save(WORKINPROGRESS)")
+        #self.submit_button.clicked.connect(self.submit_data)
+        template_main_layout.addLayout(self.slot_layout)
+
+        self.slot_count = 0
+        if self.saved_data:
+            for name, (min_val, max_val) in self.saved_data.items():
+                self._add_slot(name, min_val, max_val)
+
+        template_layout = QtWidgets.QHBoxLayout()
+        template_layout.addWidget(self._separator())
+        template_main_layout.addLayout(template_layout)
+        template_layout.addWidget(self.add_button)
+        template_layout.addWidget(self.submit_button)
+        #template_layout.addStretch()
+        tab_widget.addTab(tab2, "Template")
         main_layout.addWidget(tab_widget)
 
 
@@ -149,6 +176,40 @@ class ROM_UI(QtWidgets.QMainWindow):
         for checkbox, box in boxes:
             checkbox.setChecked(state)
             box.setEnabled(state)
+
+    def _add_slot(self, name_text="", min_val=-40.0, max_val=40.0):
+        #self.slot_count += 1
+        hbox = QtWidgets.QHBoxLayout()
+
+        name_field = QtWidgets.QLineEdit()
+        name_field.setPlaceholderText("")
+        name_field.setText(name_text)
+
+        min_field = QtWidgets.QDoubleSpinBox()
+        min_field.setDecimals(2)
+        min_field.setRange(-9999, 9999)
+        min_field.setValue(min_val)
+
+        max_field = QtWidgets.QDoubleSpinBox()
+        max_field.setDecimals(2)
+        max_field.setRange(-9999, 9999)
+        max_field.setValue(max_val)
+
+        hbox.addWidget(name_field)
+        hbox.addWidget(QtWidgets.QLabel("Min:"))
+        hbox.addWidget(min_field)
+        hbox.addWidget(QtWidgets.QLabel("Max:"))
+        hbox.addWidget(max_field)
+
+        self.slot_layout.addLayout(hbox)
+
+
+        self.slot_data.append({
+            "name": name_field,
+            "min": min_field,
+            "max": max_field
+        })
+        return
 
     def add_to_list(self):
         selection = cmds.ls(selection =True)
@@ -221,6 +282,7 @@ class ROM_UI(QtWidgets.QMainWindow):
                         cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset  , value=float(rot["max_value"]))
                         cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset  + offset, value=0)
                         frame += offset * 3
+
 
 
 
