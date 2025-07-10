@@ -2,7 +2,22 @@ from PySide2 import QtWidgets, QtCore, QtGui
 from PySide2.QtCore import Qt
 from maya import cmds
 from shiboken2 import wrapInstance
+from functools import wraps
 import maya.OpenMayaUI as omui
+
+
+def _one_undo(func):
+    @wraps(func)
+    def wrap(*args, **kwargs):
+        try:
+            cmds.undoInfo(openChunk=True)
+            return func(*args, **kwargs)
+        except Exception as e:
+            raise e
+        finally:
+            cmds.undoInfo(closeChunk=True)
+    return wrap
+
 
 class ROM_UI(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
@@ -127,10 +142,14 @@ class ROM_UI(QtWidgets.QMainWindow):
         execute_btn = QtWidgets.QPushButton("Execute")
         execute_btn.clicked.connect(lambda: self.execute_rom())
 
+        mirror_keyframe_checkbox = QtWidgets.QCheckBox("key mirror at same time")
+
         clear_keyframe_btn = QtWidgets.QPushButton("Clear Keyframe")
         tab1_layout.addWidget(custom_keyframe_checkbox)
+        tab1_layout.addWidget(mirror_keyframe_checkbox )
         tab1_layout.addWidget(execute_btn)
         tab1_layout.addWidget(clear_keyframe_btn)
+
 
 
         tab1_layout.addStretch()
@@ -204,11 +223,7 @@ class ROM_UI(QtWidgets.QMainWindow):
         self.slot_layout.addLayout(hbox)
 
 
-        self.slot_data.append({
-            "name": name_field,
-            "min": min_field,
-            "max": max_field
-        })
+        self.slot_data.append({name_field.text() : {"min": min_field.value(), "max": max_field.value()}})
         return
 
     def add_to_list(self):
@@ -233,6 +248,9 @@ class ROM_UI(QtWidgets.QMainWindow):
         return rotation_data
 
 
+
+
+    @_one_undo
     def execute_rom(self):
         selection = []
         if self.selection_radio.isChecked():
@@ -240,48 +258,66 @@ class ROM_UI(QtWidgets.QMainWindow):
 
         rotation_data = self.get_val()
         frame = 0
-        offset = float(self.step_box.text())
-        already_grouped = set()
-        for rot in rotation_data:
-            for selected in selection:
-                result = []
 
-                if self.rotate_list_widget.count() > 0:
-                    for i in range(self.rotate_list_widget.count()):
-                        text = self.rotate_list_widget.item(i).text()
-                        if selected in already_grouped:
-                            continue
-                        if selected in text:
-                            result = [x.strip() for x in text.split(',')]
-                            break
 
-                if result:
-                    for joint in result:
+
+
+
+
+
+        print(self.slot_data)
+        for selected in selection:
+            offset = float(self.step_box.text())
+            min_val = None
+            max_val = None
+            for slot in self.slot_data:
+                for key, data in slot.items():
+                    if key in selected:
+                        min_val = data["min"]
+                        max_val = data["max"]
+            for rot in rotation_data:
+                if rot["min_enabled"]:
+                    rotate_value = min_val if min_val is not None else float(rot["min_value"])
+                    cmds.setKeyframe(selected, attribute=rot["axis"], time=frame, value=0)
+                    cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset, value=rotate_value)
+                    cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset + offset, value=0)
+                    frame += offset * 3
+
+
+                if rot["max_enabled"]:
+                    rotate_value = max_val if max_val is not None else float(rot["max_value"])
+
+                    cmds.setKeyframe(selected, attribute=rot["axis"], time=frame, value=0)
+                    cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset  , value=rotate_value)
+                    cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset  + offset, value=0)
+                    frame += offset * 3
+
+
+        result = []
+        if self.rotate_list_widget.count() > 0:
+            for i in range(self.rotate_list_widget.count()):
+                text = self.rotate_list_widget.item(i).text()
+                result.append(text)
+        rotate_tgt_groups = [set(group.replace(' ', '').split(',')) for group in result]
+
+        if rotate_tgt_groups:
+            for rot in rotation_data:
+                for grp in rotate_tgt_groups:
+                    for joint in grp:
+                        value = 0
                         if rot["min_enabled"]:
                             cmds.setKeyframe(joint, attribute=rot["axis"], time=frame, value=0)
                             cmds.setKeyframe(joint, attribute=rot["axis"], time=frame + offset, value=float(rot["min_value"]))
                             cmds.setKeyframe(joint, attribute=rot["axis"], time=frame + offset + offset, value=0)
-                        frame += offset * 3
+                            value = offset * 3
 
                         if rot["max_enabled"]:
-                            cmds.setKeyframe(selected, attribute=rot["axis"], time=frame, value=0)
-                            cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset  , value=float(rot["max_value"]))
-                            cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset  + offset, value=0)
-                        frame += offset * 3
-                    already_grouped.update(result)
-
-                for joint in selected:
-                    if rot["min_enabled"]:
-                        cmds.setKeyframe(joint, attribute=rot["axis"], time=frame, value=0)
-                        cmds.setKeyframe(joint, attribute=rot["axis"], time=frame + offset, value=float(rot["min_value"]))
-                        cmds.setKeyframe(joint, attribute=rot["axis"], time=frame + offset + offset, value=0)
-                        frame += offset * 3
-
-                    if rot["max_enabled"]:
-                        cmds.setKeyframe(selected, attribute=rot["axis"], time=frame, value=0)
-                        cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset  , value=float(rot["max_value"]))
-                        cmds.setKeyframe(selected, attribute=rot["axis"], time=frame + offset  + offset, value=0)
-                        frame += offset * 3
+                            cmds.setKeyframe(joint, attribute=rot["axis"], time=frame + (offset* 3), value=0)
+                            cmds.setKeyframe(joint, attribute=rot["axis"], time=frame + (offset* 4)  , value=float(rot["max_value"]))
+                            cmds.setKeyframe(joint, attribute=rot["axis"], time=frame + (offset* 5), value=0)
+                            value = offset * 6
+                    frame += value
+            
 
 
 
