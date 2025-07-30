@@ -1,0 +1,205 @@
+from maya import cmds
+from shiboken2 import wrapInstance
+from PySide2 import QtWidgets, QtCore, QtGui
+import maya.OpenMayaUI as omui
+
+
+class WeightTool_UI(QtWidgets.QMainWindow):
+    def __init__(self, parent=None):
+        super(WeightTool_UI, self).__init__(parent)
+        self.setFixedSize(300, 450)
+        self.create_UI()
+
+
+    def create_UI(self):
+        central_widget = QtWidgets.QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QtWidgets.QVBoxLayout(central_widget)
+
+
+        selection_layout = QtWidgets.QHBoxLayout()
+        shrink_button = QtWidgets.QPushButton("Shrink")
+        grow_button = QtWidgets.QPushButton("Grow")
+        ring_button = QtWidgets.QPushButton("Ring")
+        loop_button = QtWidgets.QPushButton("Loop")
+        shrink_button.clicked.connect(lambda: self.propagate_selection(2))
+        grow_button.clicked.connect(lambda: self.propagate_selection(1))
+        #ring_button.clicked.connect(lambda : self.propagate_selection(0))
+        #loop_button.clicked.connect(lambda: self.propagate_selection(4))
+        selection_layout.addWidget(shrink_button)
+        selection_layout.addWidget(grow_button)
+        #selection_layout.addWidget(ring_button)
+        #selection_layout.addWidget(loop_button)
+        main_layout.addLayout(selection_layout)
+
+        number_layout = QtWidgets.QHBoxLayout()
+        zero_button = QtWidgets.QPushButton("0")
+        zero_one_button = QtWidgets.QPushButton("0.1")
+        zero_two_five_button = QtWidgets.QPushButton("0.25")
+        zero_five_button = QtWidgets.QPushButton("0.5")
+        zero_seven_five_button = QtWidgets.QPushButton("0.75")
+        zero_nine_button = QtWidgets.QPushButton("0.9")
+        one_button = QtWidgets.QPushButton("1")
+        number_layout.addWidget(zero_button)
+        number_layout.addWidget(zero_one_button)
+        number_layout.addWidget(zero_two_five_button)
+        number_layout.addWidget(zero_five_button)
+        number_layout.addWidget(zero_seven_five_button)
+        number_layout.addWidget(zero_nine_button)
+        number_layout.addWidget(one_button)
+        main_layout.addLayout(number_layout)
+
+
+        set_weight_layout = QtWidgets.QHBoxLayout()
+        set_weight_button = QtWidgets.QPushButton("Set Weight")
+        set_weight_box = QtWidgets.QDoubleSpinBox()
+        set_weight_box.setValue(0.5)
+        set_add_button = QtWidgets.QPushButton()
+        set_add_button.setIcon(QtGui.QIcon(":addClip.png"))
+        set_subtract_button = QtWidgets.QPushButton("-")
+        set_weight_layout.addWidget(set_weight_button)
+        set_weight_layout.addWidget(set_weight_box)
+        set_weight_layout.addWidget(set_add_button)
+        set_weight_layout.addWidget(set_subtract_button)
+        main_layout.addLayout(set_weight_layout)
+
+        scale_weight_layout = QtWidgets.QHBoxLayout()
+        scale_weight_button = QtWidgets.QPushButton("Scale Weight")
+        scale_weight_box = QtWidgets.QDoubleSpinBox()
+        scale_weight_box.setValue(0.95)
+        scale_add_button = QtWidgets.QPushButton()
+        scale_add_button.setIcon(QtGui.QIcon(":addClip.png"))
+        scale_subtract_button = QtWidgets.QPushButton("-")
+        scale_weight_layout.addWidget(scale_weight_button)
+        scale_weight_layout.addWidget(scale_weight_box)
+        scale_weight_layout.addWidget(scale_add_button)
+        scale_weight_layout.addWidget(scale_subtract_button)
+        main_layout.addLayout(scale_weight_layout)
+
+        vertex_layout = QtWidgets.QHBoxLayout()
+        vertex_label = QtWidgets.QLabel("0 Vertex selected")
+        auto_checkbox = QtWidgets.QCheckBox("auto-lock")
+        auto_checkbox.setChecked(True)
+        refresh_button = QtWidgets.QPushButton("Refresh")
+        vertex_layout.addWidget(vertex_label)
+        vertex_layout.addWidget(auto_checkbox)
+        vertex_layout.addWidget(refresh_button)
+        main_layout.addLayout(vertex_layout)
+        self.script_job_id = cmds.scriptJob(event=["SelectionChanged", self.update_vertex_list], protected=True)
+        self.joint_list = QtWidgets.QListWidget()
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.joint_list.setFont(font)
+        self.joint_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.joint_list.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.joint_list.itemChanged.connect(self.on_item_changed)
+
+
+        main_layout.addWidget(self.joint_list)
+
+    def propagate_selection(self, idx = 1):
+        cmds.polySelectConstraint(pp=idx)
+
+    def update_vertex_list(self):
+        component_keys = ['.vtx[', '.e[', '.f[', '.map[', '.uvShell[','.shell[']
+        selected = cmds.ls(selection=True)
+        obj = None
+        if selected:
+            shape = cmds.ls(selection=True, objectsOnly = True)[0]
+            node_type = cmds.nodeType(shape)
+            if node_type == 'mesh':
+                obj = cmds.listRelatives(shape, parent=True)[0] or []
+
+            elif node_type == "transform":#delete later
+                return
+
+            if obj:
+
+                history = cmds.listHistory(obj)
+                skin_clusters = cmds.ls(history, type="skinCluster")
+                if skin_clusters and len(skin_clusters)==1:
+                    influence_data = {}
+                    for component in selected:
+                        joint_list = []
+                        if any(key in component for key in component_keys):
+                            joint_list = cmds.skinPercent(skin_clusters[0], component,  transform=None ,query=True)
+                        for joint in joint_list:
+                            if joint not in influence_data:
+                                value = cmds.skinPercent(skin_clusters[0],component, transform=joint, query=True)
+                                influence_data[joint] = value
+                    self.joint_list.clear()
+                    for jnt, weight in influence_data.items():
+                        if weight != 0.0:
+                            self.populate_list(jnt,weight)
+
+
+    def populate_list(self, jnt, weight, locked=False):
+        item = QtWidgets.QListWidgetItem(str(round(weight,2))+ "   :  "+ jnt)
+        item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsUserCheckable)
+
+        item.setCheckState(QtCore.Qt.Unchecked)
+        item.setIcon(QtGui.QIcon(":Lock_OFF.png"))
+        self.joint_list.addItem(item)
+
+
+
+
+    def on_item_changed(self,item):
+        self.joint_list.blockSignals(True)
+        if item:
+            new_state = item.checkState()
+            print(new_state)
+            item.setIcon(QtGui.QIcon(":Lock_OFF.png")) if new_state == QtCore.Qt.Unchecked else item.setIcon(QtGui.QIcon(":Lock_ON.png"))
+
+            for selected_item in self.joint_list.selectedItems():
+                if selected_item != item:
+                    selected_item.setCheckState(new_state)
+                    selected_item.setIcon(QtGui.QIcon(":Lock_OFF.png")) if new_state == QtCore.Qt.Unchecked else selected_item.setIcon(QtGui.QIcon(":Lock_ON.png"))
+
+        else:
+            new_state = QtCore.Qt.Unchecked if self.joint_list.selectedItems()[0].checkState() == QtCore.Qt.Checked else QtCore.Qt.Checked
+            for selected_item in self.joint_list.selectedItems():
+                selected_item.setCheckState(new_state)
+                selected_item.setIcon(QtGui.QIcon(":Lock_OFF.png")) if new_state == QtCore.Qt.Unchecked else selected_item.setIcon(QtGui.QIcon(":Lock_ON.png"))
+
+        self.joint_list.blockSignals(False)
+
+
+
+
+
+        return
+
+
+
+
+    def closeEvent(self,event):
+        if cmds.scriptJob(exists=self.script_job_id):
+            cmds.scriptJob(kill=self.script_job_id, force=True)
+            print("Successful")
+        event.accept()
+
+
+
+
+def getWindow():
+    main_window_ptr = omui.MQtUtil.mainWindow()
+    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
+
+
+def show_tool():
+    global weight_tool_UI
+
+    try:
+        if weight_tool_UI is not None:
+            weight_tool_UI.close()
+            weight_tool_UI.deleteLater()
+    except:
+        pass
+
+    parent = getWindow()
+    weight_tool_UI = WeightTool_UI(parent)
+    weight_tool_UI.show()
+
+show_tool()
+
