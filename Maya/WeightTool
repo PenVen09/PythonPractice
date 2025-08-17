@@ -1,0 +1,451 @@
+from maya import cmds
+from shiboken2 import wrapInstance
+from PySide2 import QtWidgets, QtCore, QtGui
+import maya.OpenMayaUI as omui
+from functools import partial
+import operator
+
+class WeightTool_UI(QtWidgets.QMainWindow):
+    def __init__(self, parent=None):
+        super(WeightTool_UI, self).__init__(parent)
+        self.resize(400, 450)
+        self.create_UI()
+        self.locked_joints = []
+        self.update_vertex_list()
+
+    def create_UI(self):
+        central_widget = QtWidgets.QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QtWidgets.QVBoxLayout(central_widget)
+
+
+        selection_layout = QtWidgets.QHBoxLayout()
+        shrink_button = QtWidgets.QPushButton("Shrink")
+        grow_button = QtWidgets.QPushButton("Grow")
+        ring_button = QtWidgets.QPushButton("Ring")
+        loop_button = QtWidgets.QPushButton("Loop")
+        shrink_button.clicked.connect(lambda: self.propagate_selection(2))
+        grow_button.clicked.connect(lambda: self.propagate_selection(1))
+        #ring_button.clicked.connect(lambda : self.propagate_selection(0))
+        #loop_button.clicked.connect(lambda: self.propagate_selection(4))
+        selection_layout.addWidget(shrink_button)
+        selection_layout.addWidget(grow_button)
+        #selection_layout.addWidget(ring_button)
+        #selection_layout.addWidget(loop_button)
+        main_layout.addLayout(selection_layout)
+
+        number_layout = QtWidgets.QHBoxLayout()
+        self.number_list = ["0",".1", ".25", ".5",".75",".9","1"]
+        self.button_group = QtWidgets.QButtonGroup()
+        for i, number in enumerate(self.number_list):
+            btn = QtWidgets.QPushButton(number)
+            self.button_group.addButton(btn,i)
+            number_layout.addWidget(btn)
+        self.button_group.buttonClicked[int].connect(self.on_weight_selected)
+
+        main_layout.addLayout(number_layout)
+
+
+        set_weight_layout = QtWidgets.QHBoxLayout()
+        self.set_weight_check = QtWidgets.QCheckBox("Set Weight    ")
+        self.set_weight_check.setLayoutDirection(QtCore.Qt.RightToLeft)
+        self.set_weight_box = QtWidgets.QDoubleSpinBox()
+        self.set_weight_box.setSingleStep(0.25)
+        self.set_weight_box.setMaximum(1.00)
+        self.set_weight_box.setValue(0.5)
+        self.set_add_button = QtWidgets.QPushButton()
+        self.set_add_button.setIcon(QtGui.QIcon(":addClip.png"))
+        self.set_add_button.clicked.connect(partial(self.plus_minus_weight,"+"))
+        self.set_subtract_button = QtWidgets.QPushButton("-")
+        self.set_subtract_button.clicked.connect(partial(self.plus_minus_weight,"-"))
+        set_weight_layout.addWidget(self.set_weight_check)
+        set_weight_layout.addWidget(self.set_weight_box)
+        set_weight_layout.addWidget(self.set_add_button)
+        set_weight_layout.addWidget(self.set_subtract_button)
+        main_layout.addLayout(set_weight_layout)
+
+        scale_weight_layout = QtWidgets.QHBoxLayout()
+        self.scale_weight_check = QtWidgets.QCheckBox("Scale Weight")
+        self.scale_weight_check.setLayoutDirection(QtCore.Qt.RightToLeft)
+        self.scale_weight_box = QtWidgets.QDoubleSpinBox()
+        self.scale_weight_box.setSingleStep(0.15)
+        self.scale_weight_box.setMaximum(1.00)
+        self.scale_weight_box.setValue(0.95)
+        self.scale_add_button = QtWidgets.QPushButton()
+        self.scale_add_button.setIcon(QtGui.QIcon(":addClip.png"))
+        self.scale_add_button.clicked.connect(partial(self.plus_minus_weight,"*"))
+        self.scale_subtract_button = QtWidgets.QPushButton("-")
+        self.scale_subtract_button.clicked.connect(partial(self.plus_minus_weight,"/"))
+        scale_weight_layout.addWidget(self.scale_weight_check)
+        scale_weight_layout.addWidget(self.scale_weight_box)
+        scale_weight_layout.addWidget(self.scale_add_button)
+        scale_weight_layout.addWidget(self.scale_subtract_button)
+        main_layout.addLayout(scale_weight_layout)
+
+        vertex_layout = QtWidgets.QHBoxLayout()
+        vertex_label = QtWidgets.QLabel("0 Vertex selected")
+        self.auto_checkbox = QtWidgets.QCheckBox("auto-lock")
+        self.auto_checkbox.setChecked(True)
+        self.lock_checkbox = QtWidgets.QCheckBox("lock")
+        refresh_button = QtWidgets.QPushButton("Refresh")
+        vertex_layout.addWidget(vertex_label)
+        vertex_layout.addWidget(self.auto_checkbox)
+        vertex_layout.addWidget(self.lock_checkbox)
+        vertex_layout.addWidget(refresh_button)
+        main_layout.addLayout(vertex_layout)
+        self.script_job_id = cmds.scriptJob(event=["SelectionChanged", self.update_vertex_list], protected=True)
+        self.joint_list = QtWidgets.QListWidget()
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        self.joint_list.setFont(font)
+        self.joint_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.joint_list.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.joint_list.customContextMenuRequested.connect(self.show_context_menu)
+
+        self.lock_checkbox.toggled.connect(lambda isToggled: self.get_locked_joints(isToggled=isToggled))
+        main_layout.addWidget(self.joint_list)
+        self.joint_list.itemChanged.connect(self.on_item_changed)
+
+        self.add_joint = QtWidgets.QPushButton("Add Joint")
+        main_layout.addWidget(self.add_joint)
+
+    def show_context_menu(self, position):
+        sender_widget = self.sender()
+
+        item = sender_widget.itemAt(position)
+        if item:
+            index = sender_widget.row(item)
+            menu = QtWidgets.QMenu()
+            act1 = menu.addAction("Lock Selected")
+            act2 = menu.addAction("Unlock Selected")
+            act3 = menu.addAction("Lock Inverse Selection")
+            act4 = menu.addAction("Unlock Inverse Selection")
+
+            act = menu.exec_(sender_widget.mapToGlobal(position))
+            if act == act1:
+                 for item in self.joint_list.selectedItems():
+                    container = self.joint_list.itemWidget(item)
+                    if container and hasattr(container, "checkbox"):
+                        container.checkbox.setCheckState(QtCore.Qt.Checked)
+            elif act == act2:
+                for selected in self.joint_list.selectedItems():
+                    selected.setChecktState(QtCore.Qt.Unchecked)
+            elif act == act3:
+                selected_items =  self.joint_list.selectedItems()
+                current_item =  self.joint_list.currentItem()
+                inverse_selection = [item.setCheckState(QtCore.Qt.Checked)for item in selected_items if item != current_item]
+            elif act == act4:
+                selected_items =  self.joint_list.selectedItems()
+                current_item =  self.joint_list.currentItem()
+                inverse_selection = [item.setCheckState(QtCore.Qt.Unchecked)for item in selected_items if item != current_item]
+
+
+    def on_weight_selected(self,id):
+        set_weight = self.set_weight_check
+        scale_weight = self.scale_weight_check
+        widget = self.joint_list
+        if (set_weight.isChecked() or scale_weight.isChecked()) and not widget.selectedItems():
+            if set_weight.isChecked():
+                self.set_weight_box.setValue(float(self.number_list[id]))
+                self.set_weight_check.setCheckState(QtCore.Qt.Unchecked)
+            if scale_weight.isChecked():
+                self.scale_weight_box.setValue(float(self.number_list[id]))
+                self.scale_weight_check.setCheckState(QtCore.Qt.Unchecked)
+        elif not (set_weight.isChecked() or scale_weight.isChecked()) and widget.selectedItems():
+            selection = cmds.ls(selection=True)
+            if self.skin_clusters:
+                selected_items = []
+                if self.influence_length():
+                    for selected in selection:
+                        transform_values = []
+                        for item in widget.selectedItems():
+                            container = self.joint_list.itemWidget(item)
+                            value = float(self.number_list[id])
+                            joint =  container.text_label.text().split(":")[-1].strip()
+                            transform_values.append((joint, value))
+                            selected_items.append(joint)
+                    cmds.skinPercent(self.skin_clusters[0], selected, transformValue=transform_values, nrm=True)
+                    self.update_vertex_list()
+                    if float(self.number_list[id]) != 0:
+                        for item_text in selected_items:
+                            for i in range(self.joint_list.count()):
+                                item = self.joint_list.item(i)
+                                container = self.joint_list.itemWidget(item)
+                                if container and container.text_label.text().split(":")[-1].strip() == item_text:
+                                    item.setSelected(True)
+
+                    else:
+                        cmds.warning("Only 1 influence in unlocked :(")
+
+        else:
+            cmds.warning("Make sure only 1 is selected")
+
+    def propagate_selection(self, idx = 1):
+        cmds.polySelectConstraint(pp=idx)
+
+    def plus_minus_weight(self, op="+"):
+        op_map = {"+": operator.add,"-": operator.sub, "*": operator.mul,"/": operator.truediv}
+
+        value = self.set_weight_box.value()
+        selection = cmds.ls(selection=True)
+        selected_items = []
+        for selected in selection:
+            transform_values = []
+            if self.influence_length:
+                for item in self.joint_list.selectedItems():
+                    container = self.joint_list.itemWidget(item)
+                    joint_weight = float(container.text_label.text().split(":")[0].strip())
+                    joints = container.text_label.text().split(":")[-1].strip()
+
+                    transform_values.append((joints, op_map[op](joint_weight, value)))
+                    cmds.skinPercent(self.skin_clusters[0], selected, transformValue=transform_values, nrm=True)
+                    selected_items.append(joints)
+            else:
+                cmds.warning("UH")
+        self.update_vertex_list()
+        for item_text in selected_items:
+            for i in range(self.joint_list.count()):
+                item = self.joint_list.item(i)
+                container = self.joint_list.itemWidget(item)
+                if container and container.text_label.text().split(":")[-1].strip() == item_text:
+                    item.setSelected(True)
+
+
+    def influence_length(self):
+        influences = cmds.skinCluster(self.skin_clusters , query=True, influence=True) or []
+
+        unlocked = [
+            joint for joint in influences
+            if not cmds.getAttr(joint + ".lockInfluenceWeights")]
+
+        return len(unlocked) > 1
+
+    def get_locked_joints(self,isToggled=False,save=True):
+        isLocked = self.lock_checkbox.isChecked()
+        if save:
+            joint_names = []
+            #self.locked_joints = []
+
+            for i in range(self.joint_list.count()):
+                item = self.joint_list.item(i)
+                container = self.joint_list.itemWidget(item)
+                if container:
+                    if container.checkbox.checkState() == QtCore.Qt.Checked:
+                        joint_name = container.text_label.text().split(":")[-1].strip()
+                        joint_names.append(joint_name)
+                        print(joint_name)
+            self.locked_joints = joint_names
+        elif not save and not isLocked:
+            print("Test")
+            pass
+        else:
+            print("eh")
+            self.locked_joints = []
+
+        return self.locked_joints
+
+    def update_vertex_list(self):
+        component_keys = ['.vtx[', '.e[', '.f[', '.map[', '.uvShell[','.shell[']
+        selection = cmds.ls(selection=True)
+        obj = None
+        add_joint = []
+        if selection:
+            for selected in selection:
+                shape = cmds.ls(selected, objectsOnly = True)[0]
+                node_type = cmds.nodeType(shape)
+                if node_type == 'mesh':
+                    obj = cmds.listRelatives(shape, parent=True)[0]or []
+                elif node_type == "joint":
+                    add_joint.append(selected)
+                elif node_type == "transform":
+                    return
+
+
+
+            if obj:
+                history = cmds.listHistory(obj)
+                self.skin_clusters = cmds.ls(history, type="skinCluster")
+                isLocked = self.lock_checkbox.isChecked()
+                unhide_joints = self.locked_joints
+                print("unhide", unhide_joints)
+                influence_data = {}
+                if self.skin_clusters and len(self.skin_clusters)==1:
+                    all_joints =  cmds.skinCluster(self.skin_clusters[0], query=True, influence=True)
+                    for component in selection:
+                        if any(key in component for key in component_keys):
+                            joints = cmds.skinPercent(self.skin_clusters[0], component,  transform=None ,query=True)
+                            unhide_joints.extend(joints)
+
+                    for joint in unhide_joints:
+                        if joint not in influence_data:
+                            value = cmds.skinPercent(self.skin_clusters[0],component, transform=joint, query=True)
+                            influence_data[joint] = value
+
+
+                    if not isLocked:
+                        self.joint_list.clear()
+                        i=0
+                        for jnt, weight in influence_data.items():
+                            if weight > 0.0:
+                                self.populate_list(jnt,weight)
+                                i+=1
+                        self.slider_value_change(i)
+
+
+                        if add_joint:
+                            for joint in add_joint:
+                                print(joint)
+                                value = cmds.skinPercent(self.skin_clusters[0],component, transform=joint, query=True)
+                                #item = self.populate_list(add_joint,value)
+                                #item.setForeground(QtGui.QColor("red"))
+
+                    else:
+                        if self.lock_checkbox.isChecked():
+                            for i in range(self.joint_list.count()):
+                                item = self.joint_list.item(i)
+                                container = self.joint_list.itemWidget(item)
+                                if container:
+                                    joint_name = container.text_label.text().split(":")[-1].strip()
+
+                                    weight_list = cmds.skinPercent(self.skin_clusters[0], component, query=True, transform=joint_name)
+
+                                    container.text_label.setText(f"{weight_list:.2f} : {joint_name}")
+
+                    if self.auto_checkbox.isChecked():
+                        self.get_locked_influence(all_joints, lock=True)
+
+    def get_locked_influence(self, lock_joints, lock=False):
+        for joint in lock_joints:
+            cmds.setAttr(f"{joint}.liw", 1)
+
+        for i in range(self.joint_list.count()):
+            item = self.joint_list.item(i)
+            container = self.joint_list.itemWidget(item)
+            if container:
+                joint_name = container.text_label.text().split(":")[-1].strip()
+                if container.checkbox.checkState() == QtCore.Qt.Checked:
+                    cmds.setAttr(f"{joint_name}.liw", 1)
+                else:
+                    cmds.setAttr(f"{joint_name}.liw", 0)
+
+    def populate_list(self, jnt, weight, locked=False):
+        item = QtWidgets.QListWidgetItem(self.joint_list)
+
+        container = QtWidgets.QWidget()
+        hbox = QtWidgets.QHBoxLayout(container)
+        hbox.setContentsMargins(5, 2, 5, 2)
+        checkbox = QtWidgets.QCheckBox()
+        #all_joints =  cmds.skinCluster(self.skin_clusters[0], query=True, influence=True)
+        #isLocked = self.lock_checkbox.isChecked()
+        #getLocked = self.get_locked_influence(all_joints)
+
+        print("This is ",self.get_locked_joints())
+        '''
+        if jnt in self.locked_joints:
+            checkbox.setChecked(True)
+        else:
+            checkbox.setChecked(False)
+        '''
+
+
+
+        checkbox.toggled.connect(lambda state, i=item: self.on_item_changed(i))
+
+        text_label = QtWidgets.QLabel(f"{round(weight, 2)} : {jnt}")
+        slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        slider.setRange(0, 100)
+        text_label.setFixedWidth(200)
+        value_label = QtWidgets.QLabel(str(25))
+
+        slider.valueChanged.connect(lambda v: (
+            value_label.setText(str(v))
+        ))
+        container.checkbox = checkbox
+        container.text_label = text_label
+        container.slider = slider
+        container.value_label = value_label
+        hbox.addWidget(checkbox)
+        hbox.addWidget(text_label)
+        hbox.addWidget(slider)
+        hbox.addWidget(value_label)
+
+        item.setSizeHint(container.sizeHint())
+        self.joint_list.addItem(item)
+        self.joint_list.setItemWidget(item, container)
+        self.on_item_changed(item)
+
+    def slider_value_change(self, length):
+        for i in range(self.joint_list.count()):
+            item = self.joint_list.item(i)
+            container = self.joint_list.itemWidget(item)
+            if container:
+                value = int(round(100 / length, 2))
+                container.slider.setValue(value)
+                container.value_label.setText(str(value))
+
+    def on_item_changed(self,item):
+        container = self.joint_list.itemWidget(item)
+        self.joint_list.blockSignals(True)
+        if container:
+            new_state = container.checkbox.checkState()
+            joint_name= container.text_label.text().split(":")[-1].strip()
+            isLocked = 1 if new_state == QtCore.Qt.Checked else 0
+            cmds.setAttr(f"{joint_name}.liw", isLocked)
+            container.checkbox.setIcon(QtGui.QIcon(":Lock_OFF.png")) if new_state == QtCore.Qt.Unchecked else container.checkbox.setIcon(QtGui.QIcon(":Lock_ON.png"))
+            for selected_item in self.joint_list.selectedItems():
+                if selected_item != item:
+                    container_widget = self.joint_list.itemWidget(selected_item)
+                    if container_widget:
+                        container_widget.checkbox.setChecked(new_state == QtCore.Qt.Checked)
+
+
+        else:
+            selected_items = self.joint_list.selectedItems()
+            if not selected_items:
+                self.joint_list.blockSignals(False)
+                return
+            first_state = selected_items[0].checkState()
+            new_state = QtCore.Qt.Unchecked if first_state == QtCore.Qt.Checked else QtCore.Qt.Checked
+            joint_name= container.text_label.text().split(":")[-1].strip()
+            isLocked = 1 if new_state == QtCore.Qt.CheckedChecked else 0
+            cmds.setAttr(f"{joint_name}.liw", isLocked)
+            for selected_item in selected_items:
+                selected_item.setCheckState(new_state)
+                icon = ":Lock_OFF.png" if new_state == QtCore.Qt.Unchecked else ":Lock_ON.png"
+                selected_item.setIcon(QtGui.QIcon(icon))
+
+        self.joint_list.blockSignals(False)
+
+
+
+
+    def closeEvent(self,event):
+        if cmds.scriptJob(exists=self.script_job_id):
+            cmds.scriptJob(kill=self.script_job_id, force=True)
+            print("Close")
+        event.accept()
+
+
+
+
+def getWindow():
+    main_window_ptr = omui.MQtUtil.mainWindow()
+    return wrapInstance(int(main_window_ptr), QtWidgets.QWidget)
+
+
+def show_tool():
+    global weight_tool_UI
+
+    try:
+        if weight_tool_UI is not None:
+            weight_tool_UI.close()
+            weight_tool_UI.deleteLater()
+    except:
+        pass
+
+    parent = getWindow()
+    weight_tool_UI = WeightTool_UI(parent)
+    weight_tool_UI.show()
+
+show_tool()
+
